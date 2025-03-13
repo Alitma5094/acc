@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"log"
 )
 
 type tokenType int
@@ -23,9 +22,6 @@ const (
 	tokenInt
 	tokenVoid
 	tokenReturn
-
-	// misc
-	tokenEOF
 )
 
 var keywords = map[string]tokenType{
@@ -66,7 +62,10 @@ func (l *Lexer) lex() error {
 		}
 
 		l.start = l.current
-		l.scanToken()
+		err := l.scanToken()
+		if err != nil {
+			return err
+		}
 	}
 }
 
@@ -92,7 +91,9 @@ func (l *Lexer) scanToken() error {
 		l.line += 1
 	default:
 		if isDecimal(c) {
-			l.number()
+			if err := l.number(); err != nil {
+				return err
+			}
 		} else if isAlpha(c) {
 			l.identifier()
 		} else {
@@ -102,7 +103,7 @@ func (l *Lexer) scanToken() error {
 	return nil
 }
 
-func (l *Lexer) number() {
+func (l *Lexer) number() error {
 	for {
 		if isDecimal(l.peek()) {
 			l.advance()
@@ -112,9 +113,10 @@ func (l *Lexer) number() {
 	}
 
 	if !l.isAtEnd() && isAlpha(l.peek()) {
-		log.Fatalf("Invalid number at line %d", l.line)
+		return fmt.Errorf("invalid number at line %d", l.line)
 	}
 	l.addToken(tokenConstant, l.source[l.start:l.current])
+	return nil
 }
 
 func (l *Lexer) identifier() {

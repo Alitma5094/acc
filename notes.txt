@@ -1,0 +1,3 @@
+Benchmark:
+    Go: 0.71s user 0.30s system 90% cpu 1.118 total
+Python: 1.50s user 0.44s system 84% cpu 2.285 total
