@@ -1,4 +1,4 @@
-package main
+package acc
 
 import (
 	"fmt"
@@ -37,7 +37,7 @@ type token struct {
 }
 
 type Lexer struct {
-	tokens  []token
+	Tokens  []token
 	source  string
 	start   int
 	current int
@@ -55,7 +55,7 @@ func (l *Lexer) isAtEnd() bool {
 	return l.current >= len(l.source)
 }
 
-func (l *Lexer) lex() error {
+func (l *Lexer) Lex() error {
 	for {
 		if l.isAtEnd() {
 			return nil
@@ -138,7 +138,7 @@ func (l *Lexer) identifier() {
 }
 
 func (l *Lexer) addToken(tokenType tokenType, literal any) {
-	l.tokens = append(l.tokens, token{tokenType: tokenType, literal: literal, line: l.line})
+	l.Tokens = append(l.Tokens, token{tokenType: tokenType, literal: literal, line: l.line})
 }
 
 func (l *Lexer) advance() byte {

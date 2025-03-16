@@ -1,6 +1,7 @@
 package main
 
 import (
+	"acc/acc"
 	"flag"
 	"fmt"
 	"log"
@@ -14,6 +15,10 @@ func main() {
 	flag.Parse()
 
 	inputFile := flag.Arg(0)
+	if inputFile == "" {
+		log.Print("Must provide a file path")
+		os.Exit(1)
+	}
 	outputFile := fmt.Sprintf("%s.i", path.Base(inputFile))
 	defer os.Remove(outputFile)
 
@@ -31,13 +36,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	lexer := NewLexer(string(source))
-	err = lexer.lex()
+	lexer := acc.NewLexer(string(source))
+	err = lexer.Lex()
 	if err != nil {
 		log.Println(err)
 		os.Remove(outputFile)
 		os.Exit(1)
 	}
 
-	log.Printf("%q\n", lexer.tokens)
+	log.Printf("%q\n", lexer.Tokens)
 }
