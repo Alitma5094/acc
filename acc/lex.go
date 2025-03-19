@@ -32,7 +32,7 @@ var keywords = map[string]tokenType{
 
 type token struct {
 	tokenType tokenType
-	literal   any
+	literal   string
 	line      int
 }
 
@@ -131,13 +131,13 @@ func (l *Lexer) identifier() {
 	text := l.source[l.start:l.current]
 	keyword, ok := keywords[text]
 	if !ok {
-		l.addToken(tokenConstant, l.source[l.start:l.current])
+		l.addToken(tokenIdentfier, l.source[l.start:l.current])
 	} else {
 		l.addToken(keyword, l.source[l.start:l.current])
 	}
 }
 
-func (l *Lexer) addToken(tokenType tokenType, literal any) {
+func (l *Lexer) addToken(tokenType tokenType, literal string) {
 	l.Tokens = append(l.Tokens, token{tokenType: tokenType, literal: literal, line: l.line})
 }
 

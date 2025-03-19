@@ -11,7 +11,8 @@ import (
 )
 
 func main() {
-	flag.Bool("lex", false, "stop after lexing")
+	lex := flag.Bool("lex", false, "stop after lexing")
+	parse := flag.Bool("parse", false, "stop after parsing")
 	flag.Parse()
 
 	inputFile := flag.Arg(0)
@@ -45,4 +46,23 @@ func main() {
 	}
 
 	log.Printf("%q\n", lexer.Tokens)
+
+	if *lex {
+		return
+	}
+
+	parser := acc.NewParser(lexer.Tokens)
+	err = parser.Parse()
+
+	if err != nil {
+		log.Println(err)
+		os.Remove(outputFile)
+		os.Exit(1)
+	}
+
+	log.Printf("%q\n", parser.Tree)
+
+	if *parse {
+		return
+	}
 }
