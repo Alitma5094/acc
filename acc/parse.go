@@ -8,27 +8,7 @@ import (
 type Parser struct {
 	tokens []token
 	index  int
-	Tree   nodeProgram
-}
-
-type nodeProgram struct {
-	function nodeFunction
-}
-type nodeFunction struct {
-	identifier nodeIdentifier
-	statement  nodeStatement
-}
-type nodeStatement struct {
-	expression nodeExpression
-}
-type nodeExpression struct {
-	val nodeInt
-}
-type nodeIdentifier struct {
-	val string
-}
-type nodeInt struct {
-	val int
+	Tree   node
 }
 
 func NewParser(tokens []token) *Parser {
@@ -38,7 +18,8 @@ func NewParser(tokens []token) *Parser {
 }
 
 func (p *Parser) Parse() error {
-	n, err := p.parseProgram()
+	n := &nodeProgram{}
+	err := n.parse(p)
 	if err != nil {
 		return err
 	}
@@ -70,97 +51,137 @@ func (p *Parser) expect(expected tokenType) (bool, token) {
 
 }
 
-func (p *Parser) parseProgram() (nodeProgram, error) {
-	function, err := p.parseFunction()
-	if err != nil {
-		return nodeProgram{}, err
-	}
-
-	return nodeProgram{function: function}, nil
+type node interface {
+	parse(parser *Parser) error
 }
 
-func (p *Parser) parseFunction() (nodeFunction, error) {
-
-	if exists, _ := p.expect(tokenInt); !exists {
-		return nodeFunction{}, errors.New("missing int")
-	}
-
-	iden, err := p.parseIdentifier()
-	if err != nil {
-		return nodeFunction{}, err
-	}
-
-	if exists, _ := p.expect(tokenOpenParen); !exists {
-		return nodeFunction{}, errors.New("missing opening parenthisis")
-	}
-	if exists, _ := p.expect(tokenVoid); !exists {
-		return nodeFunction{}, errors.New("missing void")
-	}
-	if exists, _ := p.expect(tokenCloseParen); !exists {
-		return nodeFunction{}, errors.New("missing closing parenthisis")
-	}
-	if exists, _ := p.expect(tokenOpenBrace); !exists {
-		return nodeFunction{}, errors.New("missing opening brace")
-	}
-
-	stmt, err := p.parseStatement()
-	if err != nil {
-		return nodeFunction{}, err
-	}
-
-	if exists, _ := p.expect(tokenCloseBrace); !exists {
-		return nodeFunction{}, errors.New("missing closing brace")
-	}
-
-	return nodeFunction{
-		identifier: iden,
-		statement:  stmt}, nil
+type nodeProgram struct {
+	function *nodeFunction
 }
 
-func (p *Parser) parseStatement() (nodeStatement, error) {
-	if exists, _ := p.expect(tokenReturn); !exists {
-		return nodeStatement{}, errors.New("missing return")
-	}
-
-	return_val, err := p.parseExpression()
+func (f *nodeProgram) parse(parser *Parser) error {
+	function := &nodeFunction{}
+	err := function.parse(parser)
 	if err != nil {
-		return nodeStatement{}, err
+		return err
 	}
 
-	if exists, _ := p.expect(tokenSemicolon); !exists {
-		return nodeStatement{}, errors.New("missing return")
-	}
+	f.function = function
 
-	return nodeStatement{
-		expression: return_val,
-	}, nil
+	return nil
 }
 
-func (p *Parser) parseExpression() (nodeExpression, error) {
-	expr, err := p.parseInt()
-	if err != nil {
-		return nodeExpression{}, err
-	}
-
-	return nodeExpression{val: expr}, nil
+type nodeFunction struct {
+	name *nodeIdentifier
+	body *nodeStatement
 }
 
-func (p *Parser) parseIdentifier() (nodeIdentifier, error) {
-	exists, tok := p.expect(tokenIdentfier)
+func (f *nodeFunction) parse(parser *Parser) error {
+	if exists, _ := parser.expect(tokenInt); !exists {
+		return errors.New("missing int")
+	}
+
+	iden := &nodeIdentifier{}
+	err := iden.parse(parser)
+	if err != nil {
+		return err
+	}
+
+	if exists, _ := parser.expect(tokenOpenParen); !exists {
+		return errors.New("missing opening parenthisis")
+	}
+	if exists, _ := parser.expect(tokenVoid); !exists {
+		return errors.New("missing void")
+	}
+	if exists, _ := parser.expect(tokenCloseParen); !exists {
+		return errors.New("missing closing parenthisis")
+	}
+	if exists, _ := parser.expect(tokenOpenBrace); !exists {
+		return errors.New("missing opening brace")
+	}
+
+	stmt := &nodeStatement{}
+	err = stmt.parse(parser)
+	if err != nil {
+		return err
+	}
+
+	if exists, _ := parser.expect(tokenCloseBrace); !exists {
+		return errors.New("missing closing brace")
+	}
+
+	f.name = iden
+	f.body = stmt
+
+	return nil
+}
+
+type nodeStatement struct {
+	expression *nodeExpression
+}
+
+func (s *nodeStatement) parse(parser *Parser) error {
+	if exists, _ := parser.expect(tokenReturn); !exists {
+		return errors.New("missing return")
+	}
+
+	return_val := &nodeExpression{}
+	err := return_val.parse(parser)
+	if err != nil {
+		return err
+	}
+
+	if exists, _ := parser.expect(tokenSemicolon); !exists {
+		return errors.New("missing return")
+	}
+
+	return nil
+}
+
+type nodeExpression struct {
+	val *nodeInt
+}
+
+func (s *nodeExpression) parse(parser *Parser) error {
+	expr := &nodeInt{}
+	err := expr.parse(parser)
+	if err != nil {
+		return err
+	}
+
+	s.val = expr
+
+	return nil
+}
+
+type nodeIdentifier struct {
+	val string
+}
+
+func (s *nodeIdentifier) parse(parser *Parser) error {
+	exists, tok := parser.expect(tokenIdentfier)
 	if !exists {
-		return nodeIdentifier{}, errors.New("missing identifier")
+		return errors.New("missing identifier")
 	}
 
-	return nodeIdentifier{val: tok.literal}, nil
+	s.val = tok.literal
+
+	return nil
 }
 
-func (p *Parser) parseInt() (nodeInt, error) {
-	exists, tok := p.expect(tokenConstant)
+type nodeInt struct {
+	val int
+}
+
+func (s *nodeInt) parse(parser *Parser) error {
+	exists, tok := parser.expect(tokenConstant)
 	if !exists {
-		return nodeInt{}, errors.New("missing int")
+		return errors.New("missing int")
 	}
 
 	pint, _ := strconv.ParseInt(tok.literal, 10, 0)
 
-	return nodeInt{val: int(pint)}, nil
+	s.val = int(pint)
+
+	return nil
 }
