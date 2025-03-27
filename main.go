@@ -7,12 +7,14 @@ import (
 	"log"
 	"os"
 	"os/exec"
-	"path"
+	"path/filepath"
+	"strings"
 )
 
 func main() {
 	lex := flag.Bool("lex", false, "stop after lexing")
 	parse := flag.Bool("parse", false, "stop after parsing")
+	codeGen := flag.Bool("codegen", false, "stop before code emmision")
 	flag.Parse()
 
 	inputFile := flag.Arg(0)
@@ -20,8 +22,8 @@ func main() {
 		log.Print("Must provide a file path")
 		os.Exit(1)
 	}
-	outputFile := fmt.Sprintf("%s.i", path.Base(inputFile))
-	defer os.Remove(outputFile)
+	basePath := strings.TrimSuffix(inputFile, filepath.Ext(inputFile))
+	outputFile := fmt.Sprintf("%s.i", basePath)
 
 	cmd := exec.Command("gcc", "-E", "-P", inputFile, "-o", outputFile)
 	output, err := cmd.CombinedOutput()
@@ -36,16 +38,14 @@ func main() {
 		os.Remove(outputFile)
 		os.Exit(1)
 	}
+	os.Remove(outputFile)
 
 	lexer := acc.NewLexer(string(source))
 	err = lexer.Lex()
 	if err != nil {
 		log.Println(err)
-		os.Remove(outputFile)
 		os.Exit(1)
 	}
-
-	log.Printf("%q\n", lexer.Tokens)
 
 	if *lex {
 		return
@@ -56,13 +56,35 @@ func main() {
 
 	if err != nil {
 		log.Println(err)
-		os.Remove(outputFile)
 		os.Exit(1)
 	}
-
-	log.Printf("%q\n", parser.Tree)
 
 	if *parse {
 		return
 	}
+
+	generator := acc.NewGenerator(parser.Tree)
+	err = generator.Generate()
+
+	if err != nil {
+		log.Println(err)
+		os.Exit(1)
+	}
+
+	if *codeGen {
+		return
+	}
+
+	inputFile = fmt.Sprintf("%s.s", basePath)
+	os.WriteFile(inputFile, []byte(generator.Emit()), 0644)
+
+	cmd = exec.Command("gcc", inputFile, "-o", basePath)
+	output, err = cmd.CombinedOutput()
+
+	os.Remove(inputFile)
+	if err != nil {
+		log.Printf("Command execution failed: %v\nOutput: %s", err, string(output))
+		os.Exit(1)
+	}
+
 }

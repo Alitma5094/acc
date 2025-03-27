@@ -8,7 +8,7 @@ import (
 type Parser struct {
 	tokens []token
 	index  int
-	Tree   node
+	Tree   *nodeProgram
 }
 
 func NewParser(tokens []token) *Parser {
@@ -49,10 +49,6 @@ func (p *Parser) expect(expected tokenType) (bool, token) {
 	}
 	return false, next_token
 
-}
-
-type node interface {
-	parse(parser *Parser) error
 }
 
 type nodeProgram struct {
@@ -130,6 +126,8 @@ func (s *nodeStatement) parse(parser *Parser) error {
 	if err != nil {
 		return err
 	}
+
+	s.expression = return_val
 
 	if exists, _ := parser.expect(tokenSemicolon); !exists {
 		return errors.New("missing return")
