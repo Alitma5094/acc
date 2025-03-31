@@ -137,18 +137,78 @@ func (s *nodeStatement) parse(parser *Parser) error {
 }
 
 type nodeExpression struct {
-	val *nodeInt
+	constant *nodeInt
+	unop     *nodeUnop
 }
 
 func (s *nodeExpression) parse(parser *Parser) error {
-	expr := &nodeInt{}
-	err := expr.parse(parser)
+	// Check for opening parenthesis
+	exists, tok := parser.expect(tokenOpenParen)
+	if exists {
+		err := s.parse(parser)
+		if err != nil {
+			return err
+		}
+		if exists, _ := parser.expect(tokenCloseParen); !exists {
+			return errors.New("missing closing parenthesis")
+		}
+		return nil
+	}
+
+	// parser.index--
+
+	// Check for unary operators
+	if tok.tokenType == tokenBitwiseCompOp || tok.tokenType == tokenNegationOp {
+		parser.index-- // Move back to reread the operator
+		unop := &nodeUnop{}
+		err := unop.parse(parser)
+		if err != nil {
+			return err
+		}
+		s.unop = unop
+		return nil
+	}
+
+	parser.index--
+
+	// Must be a constant
+	constant := &nodeInt{}
+	err := constant.parse(parser)
 	if err != nil {
 		return err
 	}
+	s.constant = constant
+	return nil
+}
 
-	s.val = expr
+type unopType int
 
+const (
+	unopBitwareComp unopType = iota
+	unopNegate
+)
+
+type nodeUnop struct {
+	opType unopType
+	exp    nodeExpression
+}
+
+func (o *nodeUnop) parse(parser *Parser) error {
+	exists, tok := parser.expect(tokenBitwiseCompOp)
+	if exists {
+		o.opType = unopBitwareComp
+	} else if tok.tokenType == tokenNegationOp {
+		o.opType = unopNegate
+	} else {
+		return errors.New("expected unary operation")
+	}
+
+	e := nodeExpression{}
+	err := e.parse(parser)
+	if err != nil {
+		return err
+	}
+	o.exp = e
 	return nil
 }
 

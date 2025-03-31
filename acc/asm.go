@@ -122,11 +122,11 @@ func (g *Generator) convertStatement(s *nodeStatement) ([]asmInstruction, error)
 }
 
 func (g *Generator) convertExpression(e *nodeExpression) (*asmMov, error) {
-	if e == nil || e.val == nil {
+	if e == nil || e.constant == nil {
 		return nil, fmt.Errorf("expression node is nil")
 	}
 
-	imm := &asmImn{value: e.val.val}
+	imm := &asmImn{value: e.constant.val}
 
 	reg := &asmRegister{}
 

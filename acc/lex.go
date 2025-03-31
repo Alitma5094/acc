@@ -22,6 +22,11 @@ const (
 	tokenInt
 	tokenVoid
 	tokenReturn
+
+	// Operator
+	tokenBitwiseCompOp
+	tokenNegationOp
+	tokenDecrementOp
 )
 
 var keywords = map[string]tokenType{
@@ -82,6 +87,14 @@ func (l *Lexer) scanToken() error {
 		l.addToken(tokenCloseBrace, "}")
 	case ';':
 		l.addToken(tokenSemicolon, ";")
+	case '~':
+		l.addToken(tokenBitwiseCompOp, "~")
+	case '-':
+		if l.peek() == '-' {
+			l.addToken(tokenDecrementOp, "--")
+		} else {
+			l.addToken(tokenNegationOp, "-")
+		}
 
 	// Ignore whitespace
 	case ' ', '\t', '\r':
