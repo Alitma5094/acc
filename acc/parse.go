@@ -8,7 +8,7 @@ import (
 type Parser struct {
 	tokens []token
 	index  int
-	Tree   *nodeProgram
+	Tree   nodeProgram
 }
 
 func NewParser(tokens []token) *Parser {
@@ -18,7 +18,7 @@ func NewParser(tokens []token) *Parser {
 }
 
 func (p *Parser) Parse() error {
-	n := &nodeProgram{}
+	n := nodeProgram{}
 	err := n.parse(p)
 	if err != nil {
 		return err
@@ -52,11 +52,11 @@ func (p *Parser) expect(expected tokenType) (bool, token) {
 }
 
 type nodeProgram struct {
-	function *nodeFunction
+	function nodeFunction
 }
 
 func (f *nodeProgram) parse(parser *Parser) error {
-	function := &nodeFunction{}
+	function := nodeFunction{}
 	err := function.parse(parser)
 	if err != nil {
 		return err
@@ -68,8 +68,8 @@ func (f *nodeProgram) parse(parser *Parser) error {
 }
 
 type nodeFunction struct {
-	name *nodeIdentifier
-	body *nodeStatement
+	name nodeIdentifier
+	body nodeStatement
 }
 
 func (f *nodeFunction) parse(parser *Parser) error {
@@ -77,7 +77,7 @@ func (f *nodeFunction) parse(parser *Parser) error {
 		return errors.New("missing int")
 	}
 
-	iden := &nodeIdentifier{}
+	iden := nodeIdentifier{}
 	err := iden.parse(parser)
 	if err != nil {
 		return err
@@ -96,7 +96,7 @@ func (f *nodeFunction) parse(parser *Parser) error {
 		return errors.New("missing opening brace")
 	}
 
-	stmt := &nodeStatement{}
+	stmt := nodeStatement{}
 	err = stmt.parse(parser)
 	if err != nil {
 		return err
@@ -113,7 +113,8 @@ func (f *nodeFunction) parse(parser *Parser) error {
 }
 
 type nodeStatement struct {
-	expression *nodeExpression
+	//NOTE: Implicit return??
+	expression nodeExpression
 }
 
 func (s *nodeStatement) parse(parser *Parser) error {
@@ -121,8 +122,7 @@ func (s *nodeStatement) parse(parser *Parser) error {
 		return errors.New("missing return")
 	}
 
-	return_val := &nodeExpression{}
-	err := return_val.parse(parser)
+	return_val, err := parseExpression(parser)
 	if err != nil {
 		return err
 	}
@@ -136,23 +136,23 @@ func (s *nodeStatement) parse(parser *Parser) error {
 	return nil
 }
 
-type nodeExpression struct {
-	constant *nodeInt
-	unop     *nodeUnop
+type nodeExpression interface {
+	nodeExpr()
+	parse(p *Parser) error
 }
 
-func (s *nodeExpression) parse(parser *Parser) error {
+func parseExpression(parser *Parser) (nodeExpression, error) {
 	// Check for opening parenthesis
 	exists, tok := parser.expect(tokenOpenParen)
 	if exists {
-		err := s.parse(parser)
+		e, err := parseExpression(parser)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if exists, _ := parser.expect(tokenCloseParen); !exists {
-			return errors.New("missing closing parenthesis")
+			return nil, errors.New("missing closing parenthesis")
 		}
-		return nil
+		return e, nil
 	}
 
 	// parser.index--
@@ -160,13 +160,12 @@ func (s *nodeExpression) parse(parser *Parser) error {
 	// Check for unary operators
 	if tok.tokenType == tokenBitwiseCompOp || tok.tokenType == tokenNegationOp {
 		parser.index-- // Move back to reread the operator
-		unop := &nodeUnop{}
+		unop := nodeUnop{}
 		err := unop.parse(parser)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		s.unop = unop
-		return nil
+		return &unop, nil
 	}
 
 	parser.index--
@@ -175,10 +174,9 @@ func (s *nodeExpression) parse(parser *Parser) error {
 	constant := &nodeInt{}
 	err := constant.parse(parser)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	s.constant = constant
-	return nil
+	return constant, nil
 }
 
 type unopType int
@@ -193,6 +191,7 @@ type nodeUnop struct {
 	exp    nodeExpression
 }
 
+func (o *nodeUnop) nodeExpr() {}
 func (o *nodeUnop) parse(parser *Parser) error {
 	exists, tok := parser.expect(tokenBitwiseCompOp)
 	if exists {
@@ -203,11 +202,11 @@ func (o *nodeUnop) parse(parser *Parser) error {
 		return errors.New("expected unary operation")
 	}
 
-	e := nodeExpression{}
-	err := e.parse(parser)
+	e, err := parseExpression(parser)
 	if err != nil {
 		return err
 	}
+
 	o.exp = e
 	return nil
 }
@@ -231,6 +230,7 @@ type nodeInt struct {
 	val int
 }
 
+func (i *nodeInt) nodeExpr() {}
 func (s *nodeInt) parse(parser *Parser) error {
 	exists, tok := parser.expect(tokenConstant)
 	if !exists {
