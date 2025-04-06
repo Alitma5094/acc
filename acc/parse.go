@@ -182,7 +182,7 @@ func parseExpression(parser *Parser) (nodeExpression, error) {
 type unopType int
 
 const (
-	unopBitwareComp unopType = iota
+	unopBitwiseComp unopType = iota
 	unopNegate
 )
 
@@ -195,7 +195,7 @@ func (o *nodeUnop) nodeExpr() {}
 func (o *nodeUnop) parse(parser *Parser) error {
 	exists, tok := parser.expect(tokenBitwiseCompOp)
 	if exists {
-		o.opType = unopBitwareComp
+		o.opType = unopBitwiseComp
 	} else if tok.tokenType == tokenNegationOp {
 		o.opType = unopNegate
 	} else {
