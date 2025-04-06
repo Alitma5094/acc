@@ -15,7 +15,7 @@ func main() {
 	lex := flag.Bool("lex", false, "stop after lexing")
 	parse := flag.Bool("parse", false, "stop after parsing")
 	tac := flag.Bool("tacky", false, "stop after tack generation")
-	// codeGen := flag.Bool("codegen", false, "stop before code emmision")
+	codeGen := flag.Bool("codegen", false, "stop before code emmision")
 	flag.Parse()
 
 	inputFile := flag.Arg(0)
@@ -76,23 +76,23 @@ func main() {
 		return
 	}
 
-	// generator := acc.NewGenerator(&parser.Tree)
-	// err = generator.Generate()
+	generator := acc.NewAsmParser(tacParser.Tree)
+	err = generator.Parse()
 
-	// if err != nil {
-	// 	log.Println(err)
-	// 	os.Exit(1)
-	// }
+	if err != nil {
+		log.Println(err)
+		os.Exit(1)
+	}
 
-	// if *codeGen {
-	// 	return
-	// }
+	if *codeGen {
+		return
+	}
 
-	// inputFile = fmt.Sprintf("%s.s", basePath)
-	// os.WriteFile(inputFile, []byte(generator.Emit()), 0644)
+	inputFile = fmt.Sprintf("%s.s", basePath)
+	os.WriteFile(inputFile, []byte(generator.Emit()), 0644)
 
-	// cmd = exec.Command("gcc", inputFile, "-o", basePath)
-	// output, err = cmd.CombinedOutput()
+	cmd = exec.Command("gcc", inputFile, "-o", basePath)
+	output, err = cmd.CombinedOutput()
 
 	os.Remove(inputFile)
 	if err != nil {
