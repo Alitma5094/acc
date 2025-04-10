@@ -5,32 +5,106 @@ import (
 	"fmt"
 )
 
+type asmRegister int
+
+const (
+	regAX asmRegister = iota
+	regR10
+)
+
+type asmUnaryOp int
+
+const (
+	opNeg asmUnaryOp = iota
+	opNot
+)
+
+type asmInstruction interface {
+	instr()
+	emitASM() string
+}
+type asmOperand interface {
+	op()
+	emitASM() string
+}
+
 type AsmParser struct {
 	ast  tacProgram
 	Tree asmProgram
 }
 
+type asmProgram struct {
+	function asmFunction
+}
+
+type asmFunction struct {
+	name         string
+	instructions []asmInstruction
+}
+
+type asmMov struct {
+	src asmOperand
+	dst asmOperand
+}
+
+type asmUnary struct {
+	operator asmUnaryOp
+	operand  asmOperand
+}
+type asmRet struct {
+}
+
+type asmAllocateStack struct {
+	val int
+}
+
+type asmImn struct {
+	val int
+}
+
+type asmReg struct {
+	reg asmRegister
+}
+
+type asmPseudo struct {
+	identifier string
+}
+
+type asmStack struct {
+	val int
+}
+
+func (i *asmMov) instr()           {}
+func (i *asmAllocateStack) instr() {}
+func (i *asmUnary) instr()         {}
+func (i *asmRet) instr()           {}
+
+func (o *asmImn) op()    {}
+func (o *asmReg) op()    {}
+func (o *asmPseudo) op() {}
+func (o *asmStack) op()  {}
+
 func NewAsmParser(tree tacProgram) *AsmParser {
 	return &AsmParser{ast: tree}
 }
 
-func (p *AsmParser) Emit() string {
-	return p.Tree.emitASM()
+func (parser *AsmParser) Emit() string {
+	return parser.Tree.emitASM()
 }
 
-func (p *AsmParser) Parse() error {
+func (parser *AsmParser) Parse() error {
 	// Conert TAC to ASM
 	prog := asmProgram{}
-	err := prog.parse(p.ast)
+	err := prog.parse(parser.ast)
 	if err != nil {
 		return err
 	}
-	p.Tree = prog
+	parser.Tree = prog
 
 	// Replace psudoregisters
 	stackIndex := 4
 	stackVars := map[string]int{}
-	for i, v := range p.Tree.function.instructions {
+	for i, v := range parser.Tree.function.instructions {
 		switch inst := v.(type) {
 		case *asmMov:
 			if j, ok := inst.src.(*asmPseudo); ok {
@@ -41,7 +115,7 @@ func (p *AsmParser) Parse() error {
 					inst.src = &asmStack{val: stackIndex}
 					stackIndex += 4
 				}
-				p.Tree.function.instructions[i] = inst
+				parser.Tree.function.instructions[i] = inst
 			}
 			if j, ok := inst.dst.(*asmPseudo); ok {
 				if val, ok := stackVars[j.identifier]; ok {
@@ -51,22 +125,22 @@ func (p *AsmParser) Parse() error {
 					inst.dst = &asmStack{val: stackIndex}
 					stackIndex += 4
 				}
-				p.Tree.function.instructions[i] = inst
+				parser.Tree.function.instructions[i] = inst
 			}
 			_, srcIsStack := inst.src.(*asmStack)
 			_, dstIsStack := inst.dst.(*asmStack)
 			if srcIsStack && dstIsStack {
-				p.Tree.function.instructions[i] = &asmMov{src: inst.src, dst: &asmReg{reg: regR10}}
-				p.Tree.function.instructions = append(p.Tree.function.instructions[:i+1], append([]asmInstruction{&asmMov{src: &asmReg{reg: regR10}, dst: inst.dst}}, p.Tree.function.instructions[i+1:]...)...)
+				parser.Tree.function.instructions[i] = &asmMov{src: inst.src, dst: &asmReg{reg: regR10}}
+				parser.Tree.function.instructions = append(parser.Tree.function.instructions[:i+1], append([]asmInstruction{&asmMov{src: &asmReg{reg: regR10}, dst: inst.dst}}, parser.Tree.function.instructions[i+1:]...)...)
 			}
 
 		case *asmUnary:
 			if j, ok := inst.operand.(*asmPseudo); ok {
 				if val, ok := stackVars[j.identifier]; ok {
-					p.Tree.function.instructions[i].(*asmUnary).operand = &asmStack{val: val}
+					parser.Tree.function.instructions[i].(*asmUnary).operand = &asmStack{val: val}
 				} else {
 
-					p.Tree.function.instructions[i].(*asmUnary).operand = &asmStack{val: stackIndex}
+					parser.Tree.function.instructions[i].(*asmUnary).operand = &asmStack{val: stackIndex}
 					stackIndex += 4
 				}
 			}
@@ -75,36 +149,23 @@ func (p *AsmParser) Parse() error {
 	}
 
 	// Insert allocate stack instruction
-	p.Tree.function.instructions = append([]asmInstruction{&asmAllocateStack{val: stackIndex}}, p.Tree.function.instructions...)
+	parser.Tree.function.instructions = append([]asmInstruction{&asmAllocateStack{val: stackIndex}}, parser.Tree.function.instructions...)
 
 	return nil
 
 }
-
-type asmProgram struct {
-	function asmFunction
-}
-
-func (p *asmProgram) parse(n tacProgram) error {
+func (program *asmProgram) parse(n tacProgram) error {
 	funct := asmFunction{}
 	err := funct.parse(*n.function_definition)
 	if err != nil {
 		return err
 	}
-	p.function = funct
+	program.function = funct
 	return nil
 }
-func (p *asmProgram) emitASM() string {
-	return p.function.emitASM()
-}
+func (function *asmFunction) parse(n tacFunction) error {
+	function.name = n.identifier
 
-type asmFunction struct {
-	name         string
-	instructions []asmInstruction
-}
-
-func (f *asmFunction) parse(n tacFunction) error {
-	f.name = n.identifier
 	var instructions []asmInstruction
 	for _, i := range n.body {
 		switch instr := i.(type) {
@@ -136,17 +197,69 @@ func (f *asmFunction) parse(n tacFunction) error {
 			return fmt.Errorf("invalid instruction type: %T", i)
 		}
 	}
-	f.instructions = instructions
+	function.instructions = instructions
 	return nil
 
 }
+func (program *asmProgram) emitASM() string {
+	return program.function.emitASM()
+}
 
-func (f *asmFunction) emitASM() string {
+func (function *asmFunction) emitASM() string {
 	i := ""
-	for _, in := range f.instructions {
+	for _, in := range function.instructions {
 		i += in.emitASM()
 	}
-	return fmt.Sprintf("\t.global _%s\n_%s:\n\tpushq\t%%rbp\n\tmovq\t%%rsp, %%rbp\n%s", f.name, f.name, i)
+	return fmt.Sprintf("\t.global _%s\n_%s:\n\tpushq\t%%rbp\n\tmovq\t%%rsp, %%rbp\n%s", function.name, function.name, i)
+}
+
+func (move *asmMov) emitASM() string {
+	return fmt.Sprintf("\tmovl\t%s, %s\n", move.src.emitASM(), move.dst.emitASM())
+}
+
+func (r *asmUnary) emitASM() string {
+	return fmt.Sprintf("\t%s\t%s\n", r.operator.emitASM(), r.operand.emitASM())
+}
+
+func (r *asmAllocateStack) emitASM() string {
+	return fmt.Sprintf("\tsubq\t$%d, %%rsp\n", r.val)
+}
+
+func (r *asmRet) emitASM() string {
+	return "\tmovq\t%rbp, %rsp\n\tpopq\t%rbp\n\tret\n"
+}
+
+func (r *asmImn) emitASM() string {
+	return fmt.Sprintf("$%d", r.val)
+}
+
+func (r *asmReg) emitASM() string {
+	switch r.reg {
+	case regAX:
+		return "%eax"
+	case regR10:
+		return "%r10d"
+	default:
+		panic(fmt.Sprintf("invalid register type: %d", r.reg))
+	}
+}
+
+func (r *asmPseudo) emitASM() string {
+	panic("pseudo registers not allowed in final asm")
+}
+
+func (o *asmStack) emitASM() string {
+	return fmt.Sprintf("-%d(%%rbp)", o.val)
+}
+func (o asmUnaryOp) emitASM() string {
+	switch o {
+	case opNeg:
+		return "negl"
+	case opNot:
+		return "notl"
+	default:
+		panic(fmt.Sprintf("invalid unary operator type: %d", 0))
+	}
 }
 
 func convertOperand(n tacVal) (asmOperand, error) {
@@ -162,111 +275,6 @@ func convertOperand(n tacVal) (asmOperand, error) {
 		return nil, fmt.Errorf("invalid operand type: %T", n)
 	}
 }
-
-type asmInstruction interface {
-	instr()
-	emitASM() string
-}
-
-type asmMov struct {
-	src asmOperand
-	dst asmOperand
-}
-
-func (i *asmMov) instr() {}
-func (m *asmMov) emitASM() string {
-	return fmt.Sprintf("\tmovl\t%s, %s\n", m.src.emitASM(), m.dst.emitASM())
-}
-
-type asmUnary struct {
-	operator asmUnaryOp
-	operand  asmOperand
-}
-
-func (i *asmUnary) instr() {}
-func (r *asmUnary) emitASM() string {
-	return fmt.Sprintf("\t%s\t%s\n", r.operator.emitASM(), r.operand.emitASM())
-}
-
-type asmAllocateStack struct {
-	val int
-}
-
-func (i *asmAllocateStack) instr() {}
-func (r *asmAllocateStack) emitASM() string {
-	return fmt.Sprintf("\tsubq\t$%d, %%rsp\n", r.val)
-}
-
-type asmRet struct {
-}
-
-func (i *asmRet) instr() {}
-func (r *asmRet) emitASM() string {
-	return "\tmovq\t%rbp, %rsp\n\tpopq\t%rbp\n\tret\n"
-}
-
-type asmOperand interface {
-	op()
-	emitASM() string
-}
-
-type asmImn struct {
-	val int
-}
-
-func (o *asmImn) op() {}
-func (r *asmImn) emitASM() string {
-	return fmt.Sprintf("$%d", r.val)
-}
-
-type asmReg struct {
-	reg asmRegister
-}
-
-func (o *asmReg) op() {}
-func (r *asmReg) emitASM() string {
-	switch r.reg {
-	case regAX:
-		return "%eax"
-	case regR10:
-		return "%r10d"
-	default:
-		panic(fmt.Sprintf("invalid register type: %d", r.reg))
-	}
-}
-
-type asmPseudo struct {
-	identifier string
-}
-
-func (o *asmPseudo) op() {}
-func (r *asmPseudo) emitASM() string {
-	panic("pseudo registers not allowed in final asm")
-}
-
-type asmStack struct {
-	val int
-}
-
-func (o *asmStack) op() {}
-func (o *asmStack) emitASM() string {
-	return fmt.Sprintf("-%d(%%rbp)", o.val)
-}
-
-type asmRegister int
-
-const (
-	regAX asmRegister = iota
-	regR10
-)
-
-type asmUnaryOp int
-
-const (
-	opNeg asmUnaryOp = iota
-	opNot
-)
-
 func convertOp(n unopType) (asmUnaryOp, error) {
 	switch n {
 	case unopBitwiseComp:
@@ -275,15 +283,5 @@ func convertOp(n unopType) (asmUnaryOp, error) {
 		return opNeg, nil
 	default:
 		return -1, errors.New("invalid operation type")
-	}
-}
-func (o asmUnaryOp) emitASM() string {
-	switch o {
-	case opNeg:
-		return "negl"
-	case opNot:
-		return "notl"
-	default:
-		panic(fmt.Sprintf("invalid unary operator type: %d", 0))
 	}
 }

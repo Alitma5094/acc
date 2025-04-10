@@ -155,17 +155,12 @@ func (l *Lexer) addToken(tokenType tokenType, literal string) {
 }
 
 func (l *Lexer) advance() byte {
-	// TODO: check if is at end like peek()
 	c := l.source[l.current]
 	l.current += 1
 	return c
 }
 
 func (l *Lexer) peek() byte {
-	// TODO: find some other way to indicate end of file
-	//if l.isAtEnd() {
-	//  return '\0'
-	//}
 	return l.source[l.current]
 }
 

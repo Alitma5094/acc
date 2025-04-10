@@ -5,11 +5,52 @@ import (
 	"strconv"
 )
 
+type unopType int
+
+const (
+	unopBitwiseComp unopType = iota
+	unopNegate
+)
+
+type nodeExpression interface {
+	nodeExpr()
+	parse(p *Parser) error
+}
+
 type Parser struct {
 	tokens []token
 	index  int
 	Tree   nodeProgram
 }
+
+type nodeProgram struct {
+	function nodeFunction
+}
+
+type nodeFunction struct {
+	name nodeIdentifier
+	body nodeStatement
+}
+
+type nodeStatement struct {
+	expression nodeExpression
+}
+
+type nodeUnop struct {
+	opType unopType
+	exp    nodeExpression
+}
+
+type nodeIdentifier struct {
+	val string
+}
+
+type nodeInt struct {
+	val int
+}
+
+func (i *nodeInt) nodeExpr()  {}
+func (o *nodeUnop) nodeExpr() {}
 
 func NewParser(tokens []token) *Parser {
 	return &Parser{
@@ -17,32 +58,32 @@ func NewParser(tokens []token) *Parser {
 	}
 }
 
-func (p *Parser) Parse() error {
-	n := nodeProgram{}
-	err := n.parse(p)
+func (parser *Parser) Parse() error {
+	program := nodeProgram{}
+	err := program.parse(parser)
 	if err != nil {
 		return err
 	}
-	if !p.isAtEnd() {
+	if !parser.isAtEnd() {
 		return errors.New("invalid chars outside of function")
 	}
-	p.Tree = n
+	parser.Tree = program
 	return nil
 }
 
-func (p *Parser) isAtEnd() bool {
-	if p.index >= len(p.tokens) {
+func (parser *Parser) isAtEnd() bool {
+	if parser.index >= len(parser.tokens) {
 		// Is at end
 		return true
 	}
 	return false
 }
-func (p *Parser) expect(expected tokenType) (bool, token) {
-	if p.isAtEnd() {
+func (parser *Parser) expect(expected tokenType) (bool, token) {
+	if parser.isAtEnd() {
 		return false, token{}
 	}
-	next_token := p.tokens[p.index]
-	p.index++
+	next_token := parser.tokens[parser.index]
+	parser.index++
 
 	if next_token.tokenType == expected {
 		return true, next_token
@@ -51,34 +92,25 @@ func (p *Parser) expect(expected tokenType) (bool, token) {
 
 }
 
-type nodeProgram struct {
-	function nodeFunction
-}
-
-func (f *nodeProgram) parse(parser *Parser) error {
+func (program *nodeProgram) parse(parser *Parser) error {
 	function := nodeFunction{}
 	err := function.parse(parser)
 	if err != nil {
 		return err
 	}
 
-	f.function = function
+	program.function = function
 
 	return nil
 }
 
-type nodeFunction struct {
-	name nodeIdentifier
-	body nodeStatement
-}
-
-func (f *nodeFunction) parse(parser *Parser) error {
+func (function *nodeFunction) parse(parser *Parser) error {
 	if exists, _ := parser.expect(tokenInt); !exists {
 		return errors.New("missing int")
 	}
 
-	iden := nodeIdentifier{}
-	err := iden.parse(parser)
+	identifier := nodeIdentifier{}
+	err := identifier.parse(parser)
 	if err != nil {
 		return err
 	}
@@ -96,8 +128,8 @@ func (f *nodeFunction) parse(parser *Parser) error {
 		return errors.New("missing opening brace")
 	}
 
-	stmt := nodeStatement{}
-	err = stmt.parse(parser)
+	statement := nodeStatement{}
+	err = statement.parse(parser)
 	if err != nil {
 		return err
 	}
@@ -106,18 +138,13 @@ func (f *nodeFunction) parse(parser *Parser) error {
 		return errors.New("missing closing brace")
 	}
 
-	f.name = iden
-	f.body = stmt
+	function.name = identifier
+	function.body = statement
 
 	return nil
 }
 
-type nodeStatement struct {
-	//NOTE: Implicit return??
-	expression nodeExpression
-}
-
-func (s *nodeStatement) parse(parser *Parser) error {
+func (statement *nodeStatement) parse(parser *Parser) error {
 	if exists, _ := parser.expect(tokenReturn); !exists {
 		return errors.New("missing return")
 	}
@@ -127,7 +154,7 @@ func (s *nodeStatement) parse(parser *Parser) error {
 		return err
 	}
 
-	s.expression = return_val
+	statement.expression = return_val
 
 	if exists, _ := parser.expect(tokenSemicolon); !exists {
 		return errors.New("missing return")
@@ -136,26 +163,19 @@ func (s *nodeStatement) parse(parser *Parser) error {
 	return nil
 }
 
-type nodeExpression interface {
-	nodeExpr()
-	parse(p *Parser) error
-}
-
 func parseExpression(parser *Parser) (nodeExpression, error) {
 	// Check for opening parenthesis
 	exists, tok := parser.expect(tokenOpenParen)
 	if exists {
-		e, err := parseExpression(parser)
+		expression, err := parseExpression(parser)
 		if err != nil {
 			return nil, err
 		}
 		if exists, _ := parser.expect(tokenCloseParen); !exists {
 			return nil, errors.New("missing closing parenthesis")
 		}
-		return e, nil
+		return expression, nil
 	}
-
-	// parser.index--
 
 	// Check for unary operators
 	if tok.tokenType == tokenBitwiseCompOp || tok.tokenType == tokenNegationOp {
@@ -179,59 +199,37 @@ func parseExpression(parser *Parser) (nodeExpression, error) {
 	return constant, nil
 }
 
-type unopType int
-
-const (
-	unopBitwiseComp unopType = iota
-	unopNegate
-)
-
-type nodeUnop struct {
-	opType unopType
-	exp    nodeExpression
-}
-
-func (o *nodeUnop) nodeExpr() {}
-func (o *nodeUnop) parse(parser *Parser) error {
+func (unop *nodeUnop) parse(parser *Parser) error {
 	exists, tok := parser.expect(tokenBitwiseCompOp)
 	if exists {
-		o.opType = unopBitwiseComp
+		unop.opType = unopBitwiseComp
 	} else if tok.tokenType == tokenNegationOp {
-		o.opType = unopNegate
+		unop.opType = unopNegate
 	} else {
 		return errors.New("expected unary operation")
 	}
 
-	e, err := parseExpression(parser)
+	expression, err := parseExpression(parser)
 	if err != nil {
 		return err
 	}
 
-	o.exp = e
+	unop.exp = expression
 	return nil
 }
 
-type nodeIdentifier struct {
-	val string
-}
-
-func (s *nodeIdentifier) parse(parser *Parser) error {
+func (identifier *nodeIdentifier) parse(parser *Parser) error {
 	exists, tok := parser.expect(tokenIdentfier)
 	if !exists {
 		return errors.New("missing identifier")
 	}
 
-	s.val = tok.literal
+	identifier.val = tok.literal
 
 	return nil
 }
 
-type nodeInt struct {
-	val int
-}
-
-func (i *nodeInt) nodeExpr() {}
-func (s *nodeInt) parse(parser *Parser) error {
+func (nInt *nodeInt) parse(parser *Parser) error {
 	exists, tok := parser.expect(tokenConstant)
 	if !exists {
 		return errors.New("missing int")
@@ -239,7 +237,7 @@ func (s *nodeInt) parse(parser *Parser) error {
 
 	pint, _ := strconv.ParseInt(tok.literal, 10, 0)
 
-	s.val = int(pint)
+	nInt.val = int(pint)
 
 	return nil
 }
