@@ -59,6 +59,7 @@ func main() {
 		log.Println(err)
 		os.Exit(1)
 	}
+	// acc.PrettyPrint(parser.Tree, "")
 
 	if *parse {
 		return

@@ -6,15 +6,29 @@ import (
 )
 
 type unopType int
+type binopType int
 
 const (
 	unopBitwiseComp unopType = iota
 	unopNegate
 )
 
-type nodeExpression interface {
-	nodeExpr()
-	parse(p *Parser) error
+const (
+	binopAdd binopType = iota
+	binopSubtract
+	binopMultiply
+	binopDivide
+	binopRemainder
+)
+
+type expression interface {
+	nodeExpression()
+	parse(*Parser) error
+}
+
+type factor interface {
+	expression
+	nodeFactor()
 }
 
 type Parser struct {
@@ -22,35 +36,6 @@ type Parser struct {
 	index  int
 	Tree   nodeProgram
 }
-
-type nodeProgram struct {
-	function nodeFunction
-}
-
-type nodeFunction struct {
-	name nodeIdentifier
-	body nodeStatement
-}
-
-type nodeStatement struct {
-	expression nodeExpression
-}
-
-type nodeUnop struct {
-	opType unopType
-	exp    nodeExpression
-}
-
-type nodeIdentifier struct {
-	val string
-}
-
-type nodeInt struct {
-	val int
-}
-
-func (i *nodeInt) nodeExpr()  {}
-func (o *nodeUnop) nodeExpr() {}
 
 func NewParser(tokens []token) *Parser {
 	return &Parser{
@@ -72,35 +57,80 @@ func (parser *Parser) Parse() error {
 }
 
 func (parser *Parser) isAtEnd() bool {
-	if parser.index >= len(parser.tokens) {
-		// Is at end
-		return true
-	}
-	return false
+	return parser.index >= len(parser.tokens)
 }
+
 func (parser *Parser) expect(expected tokenType) (bool, token) {
 	if parser.isAtEnd() {
 		return false, token{}
 	}
-	next_token := parser.tokens[parser.index]
+	nextToken := parser.tokens[parser.index]
 	parser.index++
-
-	if next_token.tokenType == expected {
-		return true, next_token
+	if nextToken.tokenType == expected {
+		return true, nextToken
 	}
-	return false, next_token
-
+	return false, nextToken
 }
+
+func (parser *Parser) peek() token {
+	if parser.isAtEnd() {
+		return token{}
+	}
+	return parser.tokens[parser.index]
+}
+
+type nodeProgram struct {
+	function nodeFunction
+}
+
+type nodeFunction struct {
+	name nodeIdentifier
+	body nodeStatement
+}
+
+type nodeStatement struct {
+	expression expression
+}
+
+type nodeBinop struct {
+	left   expression
+	right  expression
+	opType binopType
+}
+
+type nodeUnop struct {
+	opType unopType
+	exp    factor
+}
+
+type nodeFactor struct {
+	factor factor
+}
+
+type nodeInt struct {
+	val int
+}
+
+type nodeIdentifier struct {
+	val string
+}
+
+func (*nodeBinop) nodeExpression()  {}
+func (*nodeUnop) nodeExpression()   {}
+func (*nodeFactor) nodeExpression() {}
+func (*nodeInt) nodeExpression()    {}
+
+func (*nodeInt) nodeFactor()    {}
+func (*nodeUnop) nodeFactor()   {}
+func (*nodeBinop) nodeFactor()  {}
+func (*nodeFactor) nodeFactor() {}
 
 func (program *nodeProgram) parse(parser *Parser) error {
 	function := nodeFunction{}
-	err := function.parse(parser)
-	if err != nil {
+	if err := function.parse(parser); err != nil {
 		return err
 	}
-
 	program.function = function
-
 	return nil
 }
 
@@ -110,37 +140,34 @@ func (function *nodeFunction) parse(parser *Parser) error {
 	}
 
 	identifier := nodeIdentifier{}
-	err := identifier.parse(parser)
-	if err != nil {
+	if err := identifier.parse(parser); err != nil {
 		return err
 	}
 
 	if exists, _ := parser.expect(tokenOpenParen); !exists {
-		return errors.New("missing opening parenthisis")
+		return errors.New("missing (")
 	}
 	if exists, _ := parser.expect(tokenVoid); !exists {
 		return errors.New("missing void")
 	}
 	if exists, _ := parser.expect(tokenCloseParen); !exists {
-		return errors.New("missing closing parenthisis")
+		return errors.New("missing )")
 	}
 	if exists, _ := parser.expect(tokenOpenBrace); !exists {
-		return errors.New("missing opening brace")
+		return errors.New("missing {")
 	}
 
 	statement := nodeStatement{}
-	err = statement.parse(parser)
-	if err != nil {
+	if err := statement.parse(parser); err != nil {
 		return err
 	}
 
 	if exists, _ := parser.expect(tokenCloseBrace); !exists {
-		return errors.New("missing closing brace")
+		return errors.New("missing }")
 	}
 
 	function.name = identifier
 	function.body = statement
-
 	return nil
 }
 
@@ -149,72 +176,142 @@ func (statement *nodeStatement) parse(parser *Parser) error {
 		return errors.New("missing return")
 	}
 
-	return_val, err := parseExpression(parser)
+	expr, err := parseExpression(parser, 0)
 	if err != nil {
 		return err
 	}
-
-	statement.expression = return_val
+	statement.expression = expr
 
 	if exists, _ := parser.expect(tokenSemicolon); !exists {
-		return errors.New("missing return")
+		return errors.New("missing semicolon")
 	}
-
 	return nil
 }
 
-func parseExpression(parser *Parser) (nodeExpression, error) {
-	// Check for opening parenthesis
-	exists, tok := parser.expect(tokenOpenParen)
-	if exists {
-		expression, err := parseExpression(parser)
+func parseExpression(parser *Parser, minPrecedence int) (expression, error) {
+	left, err := parseFactor(parser)
+	if err != nil {
+		return nil, err
+	}
+	leftExpr := &nodeFactor{factor: left}
+
+	for {
+		nextToken := parser.peek()
+		if binopPrecedence(nextToken) < minPrecedence {
+			break
+		}
+		precedence := binopPrecedence(nextToken)
+
+		bin := &nodeBinop{}
+		if err := bin.parse(parser); err != nil {
+			return nil, err
+		}
+
+		rightExpr, err := parseExpression(parser, precedence+1)
+		if err != nil {
+			return nil, err
+		}
+
+		bin.left = leftExpr
+		bin.right = rightExpr
+		leftExpr = &nodeFactor{factor: bin}
+	}
+	return leftExpr, nil
+}
+
+func parseFactor(parser *Parser) (factor, error) {
+	switch parser.peek().tokenType {
+	case tokenConstant:
+		intNode := &nodeInt{}
+		if err := intNode.parse(parser); err != nil {
+			return nil, err
+		}
+		return intNode, nil
+
+	case tokenNegationOp, tokenBitwiseCompOp:
+		unopNode := &nodeUnop{}
+		if err := unopNode.parse(parser); err != nil {
+			return nil, err
+		}
+		return unopNode, nil
+
+	case tokenOpenParen:
+		parser.expect(tokenOpenParen)
+		expr, err := parseExpression(parser, 0)
 		if err != nil {
 			return nil, err
 		}
 		if exists, _ := parser.expect(tokenCloseParen); !exists {
-			return nil, errors.New("missing closing parenthesis")
+			return nil, errors.New("missing )")
 		}
-		return expression, nil
-	}
+		// Must be wrapped in nodeFactor to satisfy `factor` interface
+		return &nodeFactor{factor: expr.(factor)}, nil
 
-	// Check for unary operators
-	if tok.tokenType == tokenBitwiseCompOp || tok.tokenType == tokenNegationOp {
-		parser.index-- // Move back to reread the operator
-		unop := nodeUnop{}
-		err := unop.parse(parser)
-		if err != nil {
-			return nil, err
-		}
-		return &unop, nil
+	default:
+		return nil, errors.New("malformed factor")
 	}
+}
 
-	parser.index--
-
-	// Must be a constant
-	constant := &nodeInt{}
-	err := constant.parse(parser)
-	if err != nil {
-		return nil, err
+func binopPrecedence(tok token) int {
+	switch tok.tokenType {
+	case tokenAdditionOp, tokenNegationOp:
+		return 45
+	case tokenMultiplicationOp, tokenDivisionOp, tokenRemainderOp:
+		return 50
+	default:
+		return -1
 	}
-	return constant, nil
+}
+
+func (binop *nodeBinop) parse(parser *Parser) error {
+	switch parser.peek().tokenType {
+	case tokenAdditionOp:
+		parser.expect(tokenAdditionOp)
+		binop.opType = binopAdd
+	case tokenNegationOp:
+		parser.expect(tokenNegationOp)
+		binop.opType = binopSubtract
+	case tokenMultiplicationOp:
+		parser.expect(tokenMultiplicationOp)
+		binop.opType = binopMultiply
+	case tokenDivisionOp:
+		parser.expect(tokenDivisionOp)
+		binop.opType = binopDivide
+	case tokenRemainderOp:
+		parser.expect(tokenRemainderOp)
+		binop.opType = binopRemainder
+	default:
+		return errors.New("expected binary operator")
+	}
+	return nil
 }
 
 func (unop *nodeUnop) parse(parser *Parser) error {
-	exists, tok := parser.expect(tokenBitwiseCompOp)
-	if exists {
+	switch parser.peek().tokenType {
+	case tokenBitwiseCompOp:
+		parser.expect(tokenBitwiseCompOp)
 		unop.opType = unopBitwiseComp
-	} else if tok.tokenType == tokenNegationOp {
+	case tokenNegationOp:
+		parser.expect(tokenNegationOp)
 		unop.opType = unopNegate
-	} else {
-		return errors.New("expected unary operation")
+	default:
+		return errors.New("expected unary operator")
 	}
 
-	expression, err := parseExpression(parser)
+	exp, err := parseFactor(parser)
 	if err != nil {
 		return err
 	}
+	unop.exp = exp
+	return nil
+}
 
-	unop.exp = expression
+func (factor *nodeFactor) parse(parser *Parser) error {
+	innerFactor, err := parseFactor(parser)
+	if err != nil {
+		return err
+	}
+	factor.factor = innerFactor
 	return nil
 }
 
@@ -223,21 +320,19 @@ func (identifier *nodeIdentifier) parse(parser *Parser) error {
 	if !exists {
 		return errors.New("missing identifier")
 	}
-
 	identifier.val = tok.literal
-
 	return nil
 }
 
 func (nInt *nodeInt) parse(parser *Parser) error {
 	exists, tok := parser.expect(tokenConstant)
 	if !exists {
-		return errors.New("missing int")
+		return errors.New("missing int constant")
 	}
-
-	pint, _ := strconv.ParseInt(tok.literal, 10, 0)
-
+	pint, err := strconv.ParseInt(tok.literal, 10, 0)
+	if err != nil {
+		return err
+	}
 	nInt.val = int(pint)
-
 	return nil
 }

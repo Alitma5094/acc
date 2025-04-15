@@ -38,6 +38,13 @@ type tacUnary struct {
 	dst      tacVal
 }
 
+type tacBinary struct {
+	operator binopType
+	src1     tacVal
+	src2     tacVal
+	dst      tacVal
+}
+
 type tacConstant struct {
 	val int
 }
@@ -48,6 +55,7 @@ type tacVar struct {
 
 func (i *tacReturn) tacInstruction() {}
 func (i *tacUnary) tacInstruction()  {}
+func (i *tacBinary) tacInstruction() {}
 func (v *tacConstant) tacVal()       {}
 func (v *tacVar) tacVal()            {}
 
@@ -82,58 +90,78 @@ func (p *tacProgram) parse(n nodeProgram, parser *TacParser) error {
 func (f *tacFunction) parse(n nodeFunction, parser *TacParser) error {
 	f.identifier = n.name.val
 
-	switch exp := n.body.expression.(type) {
-	case *nodeUnop:
-		u := &tacUnary{}
-		if err := u.parse(*exp, parser); err != nil {
-			return err
-		}
-		parser.instructions = append(parser.instructions, u)
-
-		ret := &tacReturn{val: u.dst}
-		parser.instructions = append(parser.instructions, ret)
-
-	case *nodeInt:
-		ret := &tacReturn{}
-		if err := ret.parse(*exp, parser); err != nil {
-			return err
-		}
-		parser.instructions = append(parser.instructions, ret)
-
-	default:
-		return fmt.Errorf("got invalid expression type")
+	exp, err := parseTACExpression(n.body.expression, parser)
+	if err != nil {
+		return err
 	}
+
+	// Final return instruction
+	ret := &tacReturn{val: exp}
+	parser.instructions = append(parser.instructions, ret)
 
 	return nil
 }
 
-func (p *tacReturn) parse(n nodeInt, parser *TacParser) error {
-	c := &tacConstant{val: n.val}
-	p.val = c
-	return nil
+func parseTACExpression(exp expression, parser *TacParser) (tacVal, error) {
+	switch e := exp.(type) {
+	case *nodeFactor:
+		return parseTACExpression(e.factor, parser)
+
+	case *nodeUnop:
+		u := &tacUnary{}
+		if err := u.parse(*e, parser); err != nil {
+			return nil, err
+		}
+		parser.instructions = append(parser.instructions, u)
+		return u.dst, nil
+
+	case *nodeBinop:
+		b := &tacBinary{}
+		if err := b.parse(*e, parser); err != nil {
+			return nil, err
+		}
+		parser.instructions = append(parser.instructions, b)
+		return b.dst, nil
+
+	case *nodeInt:
+		return &tacConstant{val: e.val}, nil
+
+	default:
+		return nil, fmt.Errorf("unsupported expression type: %T", exp)
+	}
 }
 
 func (p *tacUnary) parse(n nodeUnop, parser *TacParser) error {
 	p.operator = n.opType
 
-	switch exp := n.exp.(type) {
-	case *nodeInt:
-		p.src = &tacConstant{val: exp.val}
-
-	case *nodeUnop:
-		nested := &tacUnary{}
-		if err := nested.parse(*exp, parser); err != nil {
-			return err
-		}
-
-		parser.instructions = append(parser.instructions, nested)
-
-		p.src = nested.dst
-
-	default:
-		return fmt.Errorf("invalid expression type in unary operator")
+	// Parse the operand
+	src, err := parseTACExpression(n.exp, parser)
+	if err != nil {
+		return err
 	}
 
+	p.src = src
 	p.dst = &tacVar{identifier: parser.makeTemporary()}
+	return nil
+}
+
+func (b *tacBinary) parse(n nodeBinop, parser *TacParser) error {
+	// Parse left operand
+	left, err := parseTACExpression(n.left, parser)
+	if err != nil {
+		return err
+	}
+
+	// Parse right operand
+	right, err := parseTACExpression(n.right, parser)
+	if err != nil {
+		return err
+	}
+
+	b.operator = n.opType
+	b.src1 = left
+	b.src2 = right
+	b.dst = &tacVar{identifier: parser.makeTemporary()}
+
 	return nil
 }
