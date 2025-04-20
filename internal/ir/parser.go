@@ -6,17 +6,22 @@ import (
 )
 
 type TACGenerator struct {
-	instructions []Instruction
-	tempCounter  int
+	instructions   []Instruction
+	tempVarCounter int
+	labelCounter   int
 }
 
 func NewTACGenerator() *TACGenerator {
 	return &TACGenerator{}
 }
 
-func (g *TACGenerator) makeTemporary() string {
-	g.tempCounter++
-	return fmt.Sprintf("t%d", g.tempCounter)
+func (g *TACGenerator) makeTemporaryVar() string {
+	g.tempVarCounter++
+	return fmt.Sprintf("t%d", g.tempVarCounter)
+}
+func (g *TACGenerator) makeLabel(prefix string) string {
+	g.labelCounter++
+	return fmt.Sprintf("%s.%d", prefix, g.labelCounter)
 }
 
 func (g *TACGenerator) Generate(node *parser.Program) (*Program, error) {
@@ -63,24 +68,59 @@ func (g *TACGenerator) VisitStatement(node *parser.Statement) interface{} {
 
 // VisitBinaryOp implements Visitor interface
 func (g *TACGenerator) VisitBinaryExp(node *parser.BinaryExp) interface{} {
-	// Visit left and right operands
-	leftVal := node.Left.Accept(g).(Value)
-	rightVal := node.Right.Accept(g).(Value)
+	if node.Op == parser.BinopAnd {
+		leftVal := node.Left.Accept(g).(Value)
+		falseLabel := g.makeLabel("and_false")
+		endLabel := g.makeLabel("and_end")
+		dstVar := &Variable{Identifier: g.makeTemporaryVar()}
 
-	// Create a destination temporary variable
-	destVar := &Variable{Identifier: g.makeTemporary()}
+		g.instructions = append(g.instructions, &JumpIfZeroInstr{Condition: leftVal, Target: falseLabel})
 
-	// Create binary instruction
-	binInstr := &BinaryInstr{
-		Operator: node.Op,
-		Src1:     leftVal,
-		Src2:     rightVal,
-		Dst:      destVar,
+		rightVal := node.Right.Accept(g).(Value)
+		g.instructions = append(g.instructions, &JumpIfZeroInstr{Condition: rightVal, Target: falseLabel},
+			&CopyInstr{Src: &Constant{Value: 1}, Dst: dstVar},
+			&JumpInstr{Identifier: endLabel},
+			&LabelInstr{Identifier: falseLabel},
+			&CopyInstr{Src: &Constant{Value: 0}, Dst: dstVar},
+			&LabelInstr{Identifier: endLabel})
+		return dstVar
+
+	} else if node.Op == parser.BinopOr {
+		leftVal := node.Left.Accept(g).(Value)
+		trueLabel := g.makeLabel("or_true")
+		endLabel := g.makeLabel("or_end")
+		dstVar := &Variable{Identifier: g.makeTemporaryVar()}
+
+		g.instructions = append(g.instructions, &JumpIfNotZeroInstr{Condition: leftVal, Target: trueLabel})
+
+		rightVal := node.Right.Accept(g).(Value)
+		g.instructions = append(g.instructions, &JumpIfNotZeroInstr{Condition: rightVal, Target: trueLabel},
+			&CopyInstr{Src: &Constant{Value: 0}, Dst: dstVar},
+			&JumpInstr{Identifier: endLabel},
+			&LabelInstr{Identifier: trueLabel},
+			&CopyInstr{Src: &Constant{Value: 1}, Dst: dstVar},
+			&LabelInstr{Identifier: endLabel})
+		return dstVar
+	} else {
+		// Visit left and right operands
+		leftVal := node.Left.Accept(g).(Value)
+		rightVal := node.Right.Accept(g).(Value)
+
+		// Create a destination temporary variable
+		destVar := &Variable{Identifier: g.makeTemporaryVar()}
+
+		// Create binary instruction
+		binInstr := &BinaryInstr{
+			Operator: node.Op,
+			Src1:     leftVal,
+			Src2:     rightVal,
+			Dst:      destVar,
+		}
+
+		g.instructions = append(g.instructions, binInstr)
+
+		return destVar
 	}
-
-	g.instructions = append(g.instructions, binInstr)
-
-	return destVar
 }
 
 // VisitUnaryOp implements Visitor interface
@@ -89,7 +129,7 @@ func (g *TACGenerator) VisitUnaryFactor(node *parser.UnaryFactor) interface{} {
 	sourceVal := node.Value.Accept(g).(Value)
 
 	// Create a destination temporary variable
-	destVar := &Variable{Identifier: g.makeTemporary()}
+	destVar := &Variable{Identifier: g.makeTemporaryVar()}
 
 	// Create unary instruction
 	unInstr := &UnaryInstr{
@@ -106,9 +146,4 @@ func (g *TACGenerator) VisitUnaryFactor(node *parser.UnaryFactor) interface{} {
 // VisitInt implements Visitor interface
 func (g *TACGenerator) VisitIntLiteral(node *parser.IntLiteral) interface{} {
 	return &Constant{Value: node.Value}
-}
-
-func (g *TACGenerator) VisitFactorExp(node *parser.FactorExp) interface{} {
-	// TODO: Should this do anything?
-	return nil
 }

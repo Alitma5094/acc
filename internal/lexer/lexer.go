@@ -71,6 +71,42 @@ func (l *Lexer) scanToken() error {
 		l.addToken(TokenDivisionOp, "/")
 	case '%':
 		l.addToken(TokenRemainderOp, "%")
+	case '!':
+		if l.match('=') {
+			l.addToken(TokenNotEqualOp, "!=")
+		} else {
+			l.addToken(TokenNotOp, "!")
+		}
+	case '&':
+		if l.match('&') {
+			l.addToken(TokenAndOp, "&&")
+		} else {
+			return errors.NewLexError("Invalid token: &", l.currentLocation())
+		}
+	case '|':
+		if l.match('|') {
+			l.addToken(TokenOrOp, "||")
+		} else {
+			return errors.NewLexError("Invalid token: |", l.currentLocation())
+		}
+	case '<':
+		if l.match('=') {
+			l.addToken(TokenLessOrEqualOp, "<=")
+		} else {
+			l.addToken(TokenLessThanOp, "<")
+		}
+	case '>':
+		if l.match('=') {
+			l.addToken(TokenGreaterOrEqualOp, ">=")
+		} else {
+			l.addToken(TokenGreaterThanOp, ">")
+		}
+	case '=':
+		if l.match('=') {
+			l.addToken(TokenEqualOp, "==")
+		} else {
+			return errors.NewLexError("Invalid token: =", l.currentLocation())
+		}
 
 	// Ignore whitespace
 	case ' ', '\t', '\r':

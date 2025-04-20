@@ -24,6 +24,17 @@ const (
 	opMult
 )
 
+type CondCode int
+
+const (
+	CondE CondCode = iota
+	CondNE
+	CondG
+	CondGE
+	CondL
+	CondLE
+)
+
 type Instruction interface {
 	instr()
 	EmitAsm() string
@@ -58,11 +69,34 @@ type Binary struct {
 	Operand2 Operand
 }
 
+type Cmp struct {
+	Operand1 Operand
+	Operand2 Operand
+}
+
 type Idiv struct {
 	Operand Operand
 }
 
 type Cdq struct {
+}
+
+type Jmp struct {
+	Identifier string
+}
+
+type JmpCC struct {
+	Condition  CondCode
+	Identifier string
+}
+
+type SetCC struct {
+	Condition CondCode
+	Operand   Operand
+}
+
+type Label struct {
+	Identifier string
 }
 
 type Ret struct {
@@ -92,6 +126,11 @@ func (i *Mov) instr()           {}
 func (i *AllocateStack) instr() {}
 func (i *Unary) instr()         {}
 func (i *Binary) instr()        {}
+func (i *Cmp) instr()           {}
+func (i *Jmp) instr()           {}
+func (i *JmpCC) instr()         {}
+func (i *SetCC) instr()         {}
+func (i *Label) instr()         {}
 func (i *Idiv) instr()          {}
 func (i *Cdq) instr()           {}
 func (i *Ret) instr()           {}

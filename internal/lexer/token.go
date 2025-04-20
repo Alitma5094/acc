@@ -21,14 +21,29 @@ const (
 	TokenVoid
 	TokenReturn
 
-	// Operators
+	// Unary Operators
 	TokenBitwiseCompOp
 	TokenNegationOp
+
+	// Binary Operators
 	TokenDecrementOp
 	TokenAdditionOp
 	TokenMultiplicationOp
 	TokenDivisionOp
 	TokenRemainderOp
+
+	// Logical Operators
+	TokenNotOp
+	TokenAndOp
+	TokenOrOp
+
+	// Relational Operators
+	TokenEqualOp
+	TokenNotEqualOp
+	TokenLessThanOp
+	TokenGreaterThanOp
+	TokenLessOrEqualOp
+	TokenGreaterOrEqualOp
 )
 
 type Token struct {

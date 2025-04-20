@@ -148,7 +148,7 @@ func (p *Parser) parseFactor() (Factor, error) {
 		}
 		return intNode, nil
 
-	case lexer.TokenNegationOp, lexer.TokenBitwiseCompOp:
+	case lexer.TokenNegationOp, lexer.TokenBitwiseCompOp, lexer.TokenNotOp:
 		unopNode, err := p.parseUnaryOp()
 		if err != nil {
 			return nil, err
@@ -181,6 +181,9 @@ func (p *Parser) parseUnaryOp() (*UnaryFactor, error) {
 	case lexer.TokenNegationOp:
 		p.expect(lexer.TokenNegationOp)
 		opType = UnopNegate
+	case lexer.TokenNotOp:
+		p.expect(lexer.TokenNotOp)
+		opType = UnopNot
 	default:
 		return nil, errors.New("expected unary operator")
 	}
@@ -210,6 +213,31 @@ func (p *Parser) parseBinaryOp() (BinopType, error) {
 	case lexer.TokenRemainderOp:
 		p.expect(lexer.TokenRemainderOp)
 		return BinopRemainder, nil
+	case lexer.TokenAndOp:
+		p.expect(lexer.TokenAndOp)
+		return BinopAnd, nil
+	case lexer.TokenOrOp:
+		p.expect(lexer.TokenOrOp)
+		return BinopOr, nil
+	case lexer.TokenEqualOp:
+		p.expect(lexer.TokenEqualOp)
+		return BinopEqual, nil
+	case lexer.TokenNotEqualOp:
+		p.expect(lexer.TokenNotEqualOp)
+		return BinopNotEqual, nil
+	case lexer.TokenLessThanOp:
+		p.expect(lexer.TokenLessThanOp)
+		return BinopLessThan, nil
+	case lexer.TokenLessOrEqualOp:
+		p.expect(lexer.TokenLessOrEqualOp)
+		return BinopLessOrEqual, nil
+	case lexer.TokenGreaterThanOp:
+		p.expect(lexer.TokenGreaterThanOp)
+		return BinopGreaterThan, nil
+	case lexer.TokenGreaterOrEqualOp:
+		p.expect(lexer.TokenGreaterOrEqualOp)
+		return BinopGreaterOrEqual, nil
+
 	default:
 		return 0, errors.New("expected binary operator")
 	}
@@ -237,10 +265,18 @@ func (p *Parser) parseInt() (*IntLiteral, error) {
 
 func binopPrecedence(tok lexer.Token) int {
 	switch tok.Type {
-	case lexer.TokenAdditionOp, lexer.TokenNegationOp:
-		return 45
 	case lexer.TokenMultiplicationOp, lexer.TokenDivisionOp, lexer.TokenRemainderOp:
 		return 50
+	case lexer.TokenAdditionOp, lexer.TokenNegationOp:
+		return 45
+	case lexer.TokenLessThanOp, lexer.TokenLessOrEqualOp, lexer.TokenGreaterThanOp, lexer.TokenGreaterOrEqualOp:
+		return 35
+	case lexer.TokenEqualOp, lexer.TokenNotEqualOp:
+		return 30
+	case lexer.TokenAndOp:
+		return 10
+	case lexer.TokenOrOp:
+		return 5
 	default:
 		return -1
 	}

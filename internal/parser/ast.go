@@ -10,7 +10,6 @@ type AstVisitor interface {
 	VisitFunction(node *Function) any
 	VisitStatement(node *Statement) any
 	VisitBinaryExp(node *BinaryExp) any
-	VisitFactorExp(node *FactorExp) any
 	VisitUnaryFactor(node *UnaryFactor) any
 	VisitIntLiteral(node *IntLiteral) any
 }
@@ -110,9 +109,18 @@ const (
 	BinopMultiply
 	BinopDivide
 	BinopRemainder
+	BinopAnd
+	BinopOr
+	BinopEqual
+	BinopNotEqual
+	BinopLessThan
+	BinopLessOrEqual
+	BinopGreaterThan
+	BinopGreaterOrEqual
 )
 
 const (
 	UnopBitwiseComp UnopType = iota
 	UnopNegate
+	UnopNot
 )

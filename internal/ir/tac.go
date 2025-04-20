@@ -13,6 +13,11 @@ type TacVisitor interface {
 	VisitReturnInstr(node *ReturnInstr) any
 	VisitUnaryInstr(node *UnaryInstr) any
 	VisitBinaryInstr(node *BinaryInstr) any
+	VisitCopyInstr(node *CopyInstr) any
+	VisitJumpInstr(node *JumpInstr) any
+	VisitJumpIfZeroInstr(node *JumpIfZeroInstr) any
+	VisitJumpIfNotZeroInstr(node *JumpIfNotZeroInstr) any
+	VisitLabelInstr(node *LabelInstr) any
 	VisitConstant(node *Constant) any
 	VisitVariable(node *Variable) any
 }
@@ -76,6 +81,55 @@ type BinaryInstr struct {
 func (i *BinaryInstr) instr() {}
 func (p *BinaryInstr) Accept(visitor TacVisitor) any {
 	return visitor.VisitBinaryInstr(p)
+}
+
+type CopyInstr struct {
+	Src Value
+	Dst Value
+}
+
+func (i *CopyInstr) instr() {}
+
+func (p *CopyInstr) Accept(visitor TacVisitor) any {
+	return visitor.VisitCopyInstr(p)
+}
+
+type JumpInstr struct {
+	Identifier string
+}
+
+func (i *JumpInstr) instr() {}
+func (p *JumpInstr) Accept(visitor TacVisitor) any {
+	return visitor.VisitJumpInstr(p)
+}
+
+type JumpIfZeroInstr struct {
+	Condition Value
+	Target    string
+}
+
+func (i *JumpIfZeroInstr) instr() {}
+func (p *JumpIfZeroInstr) Accept(visitor TacVisitor) any {
+	return visitor.VisitJumpIfZeroInstr(p)
+}
+
+type JumpIfNotZeroInstr struct {
+	Condition Value
+	Target    string
+}
+
+func (i *JumpIfNotZeroInstr) instr() {}
+func (p *JumpIfNotZeroInstr) Accept(visitor TacVisitor) any {
+	return visitor.VisitJumpIfNotZeroInstr(p)
+}
+
+type LabelInstr struct {
+	Identifier string
+}
+
+func (i *LabelInstr) instr() {}
+func (p *LabelInstr) Accept(visitor TacVisitor) any {
+	return visitor.VisitLabelInstr(p)
 }
 
 type Constant struct {

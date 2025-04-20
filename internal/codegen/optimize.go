@@ -23,6 +23,10 @@ func (g *AsmGenerator) FixInstructions() {
 			i += g.fixBinaryInstruction(inst, i, stackAllocator)
 		case *Idiv:
 			i += g.fixIdivInstruction(inst, i, stackAllocator)
+		case *Cmp:
+			i += g.fixCmpInstruction(inst, i, stackAllocator)
+		case *SetCC:
+			g.fixSetCCInstruction(inst, i, stackAllocator)
 		}
 	}
 
@@ -194,4 +198,72 @@ func (g *AsmGenerator) fixIdivInstruction(inst *Idiv, index int, sa *stackAlloca
 	}
 
 	return 0
+}
+
+func (g *AsmGenerator) fixCmpInstruction(inst *Cmp, index int, sa *stackAllocator) int {
+	// Replace pseudoregisters
+	if operand1, ok := inst.Operand1.(*Pseudo); ok {
+		inst.Operand1 = sa.allocateVar(operand1.Identifier)
+		g.Program.Function.Instructions[index] = inst
+	}
+
+	if operand2, ok := inst.Operand2.(*Pseudo); ok {
+		inst.Operand2 = sa.allocateVar(operand2.Identifier)
+		g.Program.Function.Instructions[index] = inst
+	}
+
+	// Can't have mem address as both src and dst
+	if _, dstIsOp := inst.Operand2.(*Stack); dstIsOp {
+
+		if _, srcIsOp := inst.Operand1.(*Stack); srcIsOp {
+			g.Program.Function.Instructions[index] = &Mov{
+				Src: inst.Operand1,
+				Dst: &Reg{Reg: regR10},
+			}
+
+			g.Program.Function.Instructions = append(
+				g.Program.Function.Instructions[:index+1],
+				append(
+					[]Instruction{
+						&Cmp{
+							Operand1: &Reg{Reg: regR10},
+							Operand2: inst.Operand2,
+						},
+					},
+					g.Program.Function.Instructions[index+1:]...,
+				)...,
+			)
+			return 1
+		}
+	} else if _, dstIsConst := inst.Operand2.(*Imn); dstIsConst {
+		// cmp cant have mem address as dst
+		g.Program.Function.Instructions[index] = &Mov{
+			Src: inst.Operand2,
+			Dst: &Reg{Reg: regR11},
+		}
+
+		g.Program.Function.Instructions = append(
+			g.Program.Function.Instructions[:index+1],
+			append(
+				[]Instruction{
+					&Cmp{
+						Operand1: inst.Operand1,
+						Operand2: &Reg{Reg: regR11},
+					},
+				},
+				g.Program.Function.Instructions[index+1:]...,
+			)...,
+		)
+		return 1
+	}
+
+	return 0
+}
+
+func (g *AsmGenerator) fixSetCCInstruction(inst *SetCC, index int, sa *stackAllocator) {
+	// Replace pseudoregister
+	if operand, ok := inst.Operand.(*Pseudo); ok {
+		inst.Operand = sa.allocateVar(operand.Identifier)
+		g.Program.Function.Instructions[index] = inst
+	}
 }
