@@ -44,6 +44,8 @@ const (
 	TokenGreaterThanOp
 	TokenLessOrEqualOp
 	TokenGreaterOrEqualOp
+
+	TokenAssignmentOp
 )
 
 type Token struct {

@@ -3,10 +3,11 @@ package config
 import "flag"
 
 type CompilerConfig struct {
-	StopAfterLexing  bool
-	StopAfterParsing bool
-	StopAfterTAC     bool
-	StopAfterCodeGen bool
+	StopAfterLexing   bool
+	StopAfterParsing  bool
+	StopAfterTAC      bool
+	StopAfterCodeGen  bool
+	StopAfterValidate bool
 }
 
 func NewCompilerConfig() *CompilerConfig {
@@ -18,4 +19,5 @@ func (c *CompilerConfig) RegisterFlags() {
 	flag.BoolVar(&c.StopAfterParsing, "parse", false, "stop after parsing")
 	flag.BoolVar(&c.StopAfterTAC, "tacky", false, "stop after TAC generation")
 	flag.BoolVar(&c.StopAfterCodeGen, "codegen", false, "stop before code emission")
+	flag.BoolVar(&c.StopAfterValidate, "validate", false, "stop after ast validation")
 }

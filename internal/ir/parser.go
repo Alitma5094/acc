@@ -11,13 +11,14 @@ type TACGenerator struct {
 	labelCounter   int
 }
 
-func NewTACGenerator() *TACGenerator {
-	return &TACGenerator{}
+// Acecept starting number from semantic analysis
+func NewTACGenerator(startVar int) *TACGenerator {
+	return &TACGenerator{tempVarCounter: startVar}
 }
 
 func (g *TACGenerator) makeTemporaryVar() string {
 	g.tempVarCounter++
-	return fmt.Sprintf("t%d", g.tempVarCounter)
+	return fmt.Sprintf("tmp.%d", g.tempVarCounter)
 }
 func (g *TACGenerator) makeLabel(prefix string) string {
 	g.labelCounter++
@@ -38,35 +39,54 @@ func (g *TACGenerator) Generate(node *parser.Program) (*Program, error) {
 func (g *TACGenerator) VisitProgram(node *parser.Program) interface{} {
 	function := node.Function.Accept(g).(Function)
 
-	// Set the final instructions list
 	function.Body = g.instructions
 
 	return &Program{Function: function}
 }
 
-// VisitFunction implements Visitor interface
 func (g *TACGenerator) VisitFunction(node *parser.Function) interface{} {
-	// Visit function body (which populates instructions)
-	node.Body.Accept(g)
+
+	for _, v := range node.Body {
+		v.Accept(g)
+	}
+
+	// Handle situation where function has no return statement; if function has return statement this will do nothing
+	g.instructions = append(g.instructions, &ReturnInstr{Value: &Constant{Value: 0}})
 
 	return Function{
-		Identifier: node.Name,
+		Identifier: node.Name.Value,
 	}
 }
 
-// VisitStatement implements Visitor interface
-func (g *TACGenerator) VisitStatement(node *parser.Statement) interface{} {
-	// Visit expression and get its result value
-	resultValue := (*node.Expression).Accept(g).(Value)
+func (g *TACGenerator) VisitReturnStatement(node *parser.ReturnStmt) any {
+	resultValue := node.Expression.Accept(g).(Value)
 
-	// Create return instruction
 	returnInstr := &ReturnInstr{Value: resultValue}
 	g.instructions = append(g.instructions, returnInstr)
 
 	return returnInstr
 }
 
-// VisitBinaryOp implements Visitor interface
+func (g *TACGenerator) VisitDeclaration(node *parser.Declaration) any {
+	if node.Init == nil {
+		return nil
+	}
+
+	initValue := node.Init.Accept(g).(Value)
+
+	variable := &Variable{Identifier: g.makeTemporaryVar()}
+
+	copyInstr := &CopyInstr{Src: initValue, Dst: variable}
+	g.instructions = append(g.instructions, copyInstr, &CopyInstr{Src: variable, Dst: &Variable{Identifier: node.Name.Value}})
+
+	return variable
+
+}
+
+func (g *TACGenerator) VisitNullStatement(node *parser.NullStmt) any {
+	return nil
+}
+
 func (g *TACGenerator) VisitBinaryExp(node *parser.BinaryExp) interface{} {
 	if node.Op == parser.BinopAnd {
 		leftVal := node.Left.Accept(g).(Value)
@@ -109,7 +129,6 @@ func (g *TACGenerator) VisitBinaryExp(node *parser.BinaryExp) interface{} {
 		// Create a destination temporary variable
 		destVar := &Variable{Identifier: g.makeTemporaryVar()}
 
-		// Create binary instruction
 		binInstr := &BinaryInstr{
 			Operator: node.Op,
 			Src1:     leftVal,
@@ -123,7 +142,18 @@ func (g *TACGenerator) VisitBinaryExp(node *parser.BinaryExp) interface{} {
 	}
 }
 
-// VisitUnaryOp implements Visitor interface
+func (g *TACGenerator) VisitAssignmentExp(node *parser.AssignmentExp) any {
+	right := node.Right.Accept(g).(Value)
+	left := node.Left.Accept(g).(*Variable)
+	g.instructions = append(g.instructions, &CopyInstr{Src: right, Dst: left})
+	return left
+
+}
+
+func (g *TACGenerator) VisitIdentifierFactor(node *parser.IdentifierFactor) any {
+	return &Variable{Identifier: node.Value}
+}
+
 func (g *TACGenerator) VisitUnaryFactor(node *parser.UnaryFactor) interface{} {
 	// Visit the operand
 	sourceVal := node.Value.Accept(g).(Value)
@@ -143,7 +173,6 @@ func (g *TACGenerator) VisitUnaryFactor(node *parser.UnaryFactor) interface{} {
 	return destVar
 }
 
-// VisitInt implements Visitor interface
 func (g *TACGenerator) VisitIntLiteral(node *parser.IntLiteral) interface{} {
 	return &Constant{Value: node.Value}
 }

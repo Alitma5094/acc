@@ -105,7 +105,7 @@ func (l *Lexer) scanToken() error {
 		if l.match('=') {
 			l.addToken(TokenEqualOp, "==")
 		} else {
-			return errors.NewLexError("Invalid token: =", l.currentLocation())
+			l.addToken(TokenAssignmentOp, "=")
 		}
 
 	// Ignore whitespace
@@ -170,15 +170,6 @@ func (l *Lexer) addToken(tokenType TokenType, literal string) {
 		errors.NewLocation(l.line, l.column-len(lexeme), l.file),
 	))
 }
-
-// func (l *Lexer) addTokenWithLiteral(tokenType TokenType, literal string) {
-// 	lexeme := l.source[l.start:l.current]
-// 	l.tokens = append(l.tokens, NewToken(
-// 		tokenType,
-// 		literal,
-// 		errors.NewLocation(l.line, l.column-len(lexeme), l.file),
-// 	))
-// }
 
 func (l *Lexer) advance() byte {
 	c := l.source[l.current]

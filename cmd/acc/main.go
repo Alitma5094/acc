@@ -6,6 +6,7 @@ import (
 	"acc/internal/ir"
 	"acc/internal/lexer"
 	"acc/internal/parser"
+	semanticanalysis "acc/internal/semantic_analysis"
 	"flag"
 	"fmt"
 	"log"
@@ -68,7 +69,7 @@ func runCompiler(source, inputFile string, cfg *config.CompilerConfig) error {
 	}
 
 	if cfg.StopAfterLexing {
-		return nil // Exit after lexical analysis
+		return nil
 	}
 
 	// Create parser
@@ -77,22 +78,31 @@ func runCompiler(source, inputFile string, cfg *config.CompilerConfig) error {
 	if err != nil {
 		return err
 	}
-	fmt.Println(ast)
 
 	if cfg.StopAfterParsing {
-		return nil // Exit after parsing
+		return nil
+	}
+
+	// Run semantic analysis
+	ana := semanticanalysis.NewSemanticAnalyzer(*ast)
+	err = ana.ResolveDelclatarions()
+	if err != nil {
+		return err
+	}
+
+	if cfg.StopAfterValidate {
+		return nil
 	}
 
 	// Generate TAC
-	tacGen := ir.NewTACGenerator()
+	tacGen := ir.NewTACGenerator(ana.TempVarCounter)
 	tacProgram, err := tacGen.Generate(ast)
 	if err != nil {
 		return err
 	}
-	fmt.Println(tacProgram)
 
 	if cfg.StopAfterTAC {
-		return nil // Exit after TAC generation
+		return nil
 	}
 
 	// Generate assembly
@@ -105,7 +115,7 @@ func runCompiler(source, inputFile string, cfg *config.CompilerConfig) error {
 	asmGen.FixInstructions()
 
 	if cfg.StopAfterCodeGen {
-		return nil // Exit before assembly file creation
+		return nil
 	}
 
 	// Write assembly to file and assemble
@@ -119,7 +129,7 @@ func runCompiler(source, inputFile string, cfg *config.CompilerConfig) error {
 	// Assemble with GCC
 	cmd := exec.Command("gcc", asmFile, "-o", basePath)
 	output, err := cmd.CombinedOutput()
-	os.Remove(asmFile) // Clean up
+	os.Remove(asmFile)
 
 	if err != nil {
 		return fmt.Errorf("assembly failed: %v\nOutput: %s", err, string(output))
