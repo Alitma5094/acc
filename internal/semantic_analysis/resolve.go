@@ -1,8 +1,8 @@
 package semanticanalysis
 
 import (
+	"acc/internal/common/errors"
 	"acc/internal/parser"
-	"errors"
 	"fmt"
 )
 
@@ -35,7 +35,7 @@ func (a *SemanticAnalyzer) ResolveDelclatarions() error {
 				return err
 			}
 		default:
-			return errors.New("invalid block item type")
+			panic("invalid block item type")
 
 		}
 	}
@@ -45,7 +45,7 @@ func (a *SemanticAnalyzer) ResolveDelclatarions() error {
 func (a *SemanticAnalyzer) resolveDelcatation(declatation *parser.Declaration) error {
 	_, ok := a.variables[declatation.Name.Value]
 	if ok {
-		return errors.New("deplicate variable declaration")
+		return errors.NewAnalysisError("duplicate variable declaration", declatation.Loc)
 	}
 
 	a.variables[declatation.Name.Value] = a.makeTemporaryVar(declatation.Name.Value)
@@ -64,7 +64,7 @@ func (a *SemanticAnalyzer) resolveExpression(expression *parser.Expression) erro
 	case *parser.AssignmentExp:
 		_, ok := item.Left.(*parser.FactorExp).Factor.(*parser.IdentifierFactor)
 		if !ok {
-			return errors.New("invalid lvalue")
+			return errors.NewAnalysisError("invalid lvalue", item.Loc)
 		}
 		err := a.resolveExpression(&item.Left)
 		if err != nil {
@@ -94,7 +94,7 @@ func (a *SemanticAnalyzer) resolveExpression(expression *parser.Expression) erro
 		}
 		return nil
 	default:
-		return errors.New("invalid expression type")
+		panic("invalid expression type")
 
 	}
 }
@@ -116,7 +116,7 @@ func (a *SemanticAnalyzer) resolveStatement(statement *parser.Statement) error {
 	case *parser.NullStmt:
 		return nil
 	default:
-		return errors.New("invalid statement type")
+		panic("invalid statement type")
 
 	}
 }
@@ -141,11 +141,11 @@ func (a *SemanticAnalyzer) resolveFactor(factor *parser.Factor) error {
 		if variable, ok := a.variables[item.Value]; ok {
 			item.Value = variable
 		} else {
-			return errors.New("undelcared variable")
+			return errors.NewAnalysisError("undelcared variable", item.Loc)
 		}
 		return nil
 	default:
-		return errors.New("invalid factor type")
+		panic("invalid factor type")
 
 	}
 }

@@ -1,5 +1,7 @@
 package parser
 
+import "acc/internal/common/errors"
+
 type BinopType int
 type UnopType int
 
@@ -64,64 +66,80 @@ type Statement interface {
 }
 
 type Program struct {
+	Loc      errors.Location
 	Function *Function
 }
 
 type Function struct {
+	Loc  errors.Location
 	Name IdentifierFactor
 	Body []BlockItem
 }
 
 type StmtBlock struct {
+	Loc       errors.Location
 	Statement Statement
 }
 type DeclarationBlock struct {
+	Loc         errors.Location
 	Declaration Declaration
 }
 
 type ReturnStmt struct {
+	Loc        errors.Location
 	Expression Expression
 }
 
 type ExpressionStmt struct {
+	Loc        errors.Location
 	Expression Expression
 }
 
-type NullStmt struct{}
+type NullStmt struct {
+	Loc errors.Location
+}
 
 type BinaryExp struct {
+	Loc   errors.Location
 	Left  Expression
 	Op    BinopType
 	Right Expression
 }
 
 type FactorExp struct {
+	Loc    errors.Location
 	Factor Factor
 }
 
 type IntLiteral struct {
+	Loc   errors.Location
 	Value int
 }
 
 type UnaryFactor struct {
+	Loc   errors.Location
 	Op    UnopType
 	Value Factor
 }
 
 type NestedExp struct {
+	Loc  errors.Location
 	Expr Expression
 }
 
 type AssignmentExp struct {
+	Loc   errors.Location
 	Left  Expression
 	Right Expression
 }
 
 type IdentifierFactor struct {
+	Loc   errors.Location
 	Value string
 }
 
 type Declaration struct {
+	Loc  errors.Location
 	Name IdentifierFactor
 	Init Expression
 }
@@ -183,6 +201,65 @@ func (u *IdentifierFactor) Accept(visitor AstVisitor) any {
 
 func (u *Declaration) Accept(visitor AstVisitor) any {
 	return visitor.VisitDeclaration(u)
+}
+
+// func (p *Program) Position() errors.Location {
+// 	return p.Loc
+// }
+
+// func (f *Function) Position() errors.Location {
+// 	return f.Loc
+// }
+
+// func (s *StmtBlock) Position() errors.Location {
+// 	return s.Loc
+// }
+
+// func (s *DeclarationBlock) Position() errors.Location {
+// 	return s.Loc
+// }
+
+// func (s *ReturnStmt) Position() errors.Location {
+// 	return s.Loc
+// }
+// func (s *ExpressionStmt) Position() errors.Location {
+// 	return s.Loc
+// }
+
+// func (s *NullStmt) Position() errors.Location {
+// 	return s.Loc
+// }
+
+// func (b *BinaryExp) Position() errors.Location {
+// 	return b.Loc
+// }
+
+// func (n *FactorExp) Position() errors.Location {
+// 	return n.Loc
+// }
+
+// func (i *IntLiteral) Position() errors.Location {
+// 	return i.Loc
+// }
+
+// func (u *UnaryFactor) Position() errors.Location {
+// 	return u.Loc
+// }
+
+// func (u *NestedExp) Position() errors.Location {
+// 	return u.Loc
+// }
+
+// func (u *AssignmentExp) Position() errors.Location {
+// 	return u.Loc
+// }
+
+func (u *IdentifierFactor) Position() errors.Location {
+	return u.Loc
+}
+
+func (u *Declaration) Position() errors.Location {
+	return u.Loc
 }
 
 func (StmtBlock) block()        {}

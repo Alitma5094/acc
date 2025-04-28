@@ -1,8 +1,8 @@
 package parser
 
 import (
+	"acc/internal/common/errors"
 	"acc/internal/lexer"
-	"errors"
 	"strconv"
 )
 
@@ -49,15 +49,15 @@ func (p *Parser) Parse() (*Program, error) {
 	program.Function = function
 
 	if !p.isAtEnd() {
-		return nil, errors.New("invalid chars outside of function")
+		return nil, errors.NewParseError("invalid chars outside of function", p.tokens[p.index].Loc)
 	}
 
 	return program, nil
 }
 
 func (p *Parser) parseFunction() (*Function, error) {
-	if exists, _ := p.expect(lexer.TokenInt); !exists {
-		return nil, errors.New("missing int")
+	if exists, tok := p.expect(lexer.TokenInt); !exists {
+		return nil, errors.NewParseError("missing int", tok.Loc)
 	}
 
 	ident, err := p.parseIdentifier()
@@ -65,17 +65,17 @@ func (p *Parser) parseFunction() (*Function, error) {
 		return nil, err
 	}
 
-	if exists, _ := p.expect(lexer.TokenOpenParen); !exists {
-		return nil, errors.New("missing (")
+	if exists, tok := p.expect(lexer.TokenOpenParen); !exists {
+		return nil, errors.NewParseError("missing (", tok.Loc)
 	}
-	if exists, _ := p.expect(lexer.TokenVoid); !exists {
-		return nil, errors.New("missing void")
+	if exists, tok := p.expect(lexer.TokenVoid); !exists {
+		return nil, errors.NewParseError("missing void", tok.Loc)
 	}
-	if exists, _ := p.expect(lexer.TokenCloseParen); !exists {
-		return nil, errors.New("missing )")
+	if exists, tok := p.expect(lexer.TokenCloseParen); !exists {
+		return nil, errors.NewParseError("missing )", tok.Loc)
 	}
-	if exists, _ := p.expect(lexer.TokenOpenBrace); !exists {
-		return nil, errors.New("missing {")
+	if exists, tok := p.expect(lexer.TokenOpenBrace); !exists {
+		return nil, errors.NewParseError("missing {", tok.Loc)
 	}
 
 	body := []BlockItem{}
@@ -88,8 +88,8 @@ func (p *Parser) parseFunction() (*Function, error) {
 		body = append(body, item)
 	}
 
-	if exists, _ := p.expect(lexer.TokenCloseBrace); !exists {
-		return nil, errors.New("missing }")
+	if exists, tok := p.expect(lexer.TokenCloseBrace); !exists {
+		return nil, errors.NewParseError("missing }", tok.Loc)
 	}
 
 	return &Function{
@@ -117,8 +117,8 @@ func (p *Parser) parseBlockItem() (BlockItem, error) {
 			}
 		}
 
-		if exists, _ := p.expect(lexer.TokenSemicolon); !exists {
-			return nil, errors.New("missing semicolon")
+		if exists, tok := p.expect(lexer.TokenSemicolon); !exists {
+			return nil, errors.NewParseError("missing semicolon", tok.Loc)
 		}
 
 		return &DeclarationBlock{Declaration: Declaration{Name: ident, Init: expression}}, nil
@@ -145,8 +145,8 @@ func (p *Parser) parseStatement() (Statement, error) {
 			return nil, err
 		}
 
-		if exists, _ := p.expect(lexer.TokenSemicolon); !exists {
-			return nil, errors.New("missing semicolon")
+		if exists, tok := p.expect(lexer.TokenSemicolon); !exists {
+			return nil, errors.NewParseError("missing semicolon", tok.Loc)
 		}
 		return &ReturnStmt{Expression: expr}, nil
 	} else {
@@ -155,8 +155,8 @@ func (p *Parser) parseStatement() (Statement, error) {
 			return nil, err
 		}
 
-		if exists, _ := p.expect(lexer.TokenSemicolon); !exists {
-			return nil, errors.New("missing semicolon")
+		if exists, tok := p.expect(lexer.TokenSemicolon); !exists {
+			return nil, errors.NewParseError("missing semicolon", tok.Loc)
 		}
 
 		return &ExpressionStmt{Expression: expr}, nil
@@ -226,8 +226,8 @@ func (p *Parser) parseFactor() (Factor, error) {
 		if err != nil {
 			return nil, err
 		}
-		if exists, _ := p.expect(lexer.TokenCloseParen); !exists {
-			return nil, errors.New("missing )")
+		if exists, tok := p.expect(lexer.TokenCloseParen); !exists {
+			return nil, errors.NewParseError("missing )", tok.Loc)
 		}
 		return &NestedExp{Expr: expr}, nil
 
@@ -243,7 +243,8 @@ func (p *Parser) parseFactor() (Factor, error) {
 func (p *Parser) parseUnaryOp() (*UnaryFactor, error) {
 	var opType UnopType
 
-	switch p.peek().Type {
+	nextTok := p.peek()
+	switch nextTok.Type {
 	case lexer.TokenBitwiseCompOp:
 		p.expect(lexer.TokenBitwiseCompOp)
 		opType = UnopBitwiseComp
@@ -254,7 +255,7 @@ func (p *Parser) parseUnaryOp() (*UnaryFactor, error) {
 		p.expect(lexer.TokenNotOp)
 		opType = UnopNot
 	default:
-		return nil, errors.New("expected unary operator")
+		return nil, errors.NewParseError("expected unary operator", nextTok.Loc)
 	}
 
 	exp, err := p.parseFactor()
@@ -266,7 +267,8 @@ func (p *Parser) parseUnaryOp() (*UnaryFactor, error) {
 }
 
 func (p *Parser) parseBinaryOp() (BinopType, error) {
-	switch p.peek().Type {
+	nextTok := p.peek()
+	switch nextTok.Type {
 	case lexer.TokenAdditionOp:
 		p.expect(lexer.TokenAdditionOp)
 		return BinopAdd, nil
@@ -308,14 +310,14 @@ func (p *Parser) parseBinaryOp() (BinopType, error) {
 		return BinopGreaterOrEqual, nil
 
 	default:
-		return -1, errors.New("expected binary operator")
+		return -1, errors.NewParseError("expected binary operator", nextTok.Loc)
 	}
 }
 
 func (p *Parser) parseIdentifier() (IdentifierFactor, error) {
 	exists, tok := p.expect(lexer.TokenIdentifier)
 	if !exists {
-		return IdentifierFactor{}, errors.New("missing identifier")
+		return IdentifierFactor{}, errors.NewParseError("missing identifier", tok.Loc)
 	}
 	return IdentifierFactor{Value: tok.Literal}, nil
 }
@@ -323,7 +325,7 @@ func (p *Parser) parseIdentifier() (IdentifierFactor, error) {
 func (p *Parser) parseInt() (*IntLiteral, error) {
 	exists, tok := p.expect(lexer.TokenConstant)
 	if !exists {
-		return nil, errors.New("missing int constant")
+		return nil, errors.NewParseError("missing int constant", tok.Loc)
 	}
 	val, err := strconv.ParseInt(tok.Literal, 10, 0)
 	if err != nil {

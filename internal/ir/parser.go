@@ -1,6 +1,7 @@
 package ir
 
 import (
+	"acc/internal/common/errors"
 	"acc/internal/parser"
 	"fmt"
 )
@@ -33,7 +34,7 @@ func (g *TACGenerator) Generate(node *parser.Program) (*Program, error) {
 		return program, nil
 	}
 
-	return nil, fmt.Errorf("failed to generate TAC program")
+	return nil, errors.NewIRGenError("top TAC node is not a Program")
 }
 
 func (g *TACGenerator) VisitProgram(node *parser.Program) interface{} {

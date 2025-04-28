@@ -13,6 +13,7 @@ type CompilationPhase int
 const (
 	LexPhase CompilationPhase = iota
 	ParsePhase
+	AnalysisPhase
 	IRGenPhase
 	CodeGenPhase
 )
@@ -23,6 +24,8 @@ func (p CompilationPhase) String() string {
 		return "Lexical Analysis"
 	case ParsePhase:
 		return "Syntax Analysis"
+	case AnalysisPhase:
+		return "Semantic Analysis"
 	case IRGenPhase:
 		return "IR Generation"
 	case CodeGenPhase:
@@ -50,6 +53,14 @@ func NewParseError(msg string, loc Location) *CompilerError {
 		Message:  msg,
 		Location: loc,
 		Phase:    ParsePhase,
+	}
+}
+
+func NewAnalysisError(msg string, loc Location) *CompilerError {
+	return &CompilerError{
+		Message:  msg,
+		Location: loc,
+		Phase:    AnalysisPhase,
 	}
 }
 

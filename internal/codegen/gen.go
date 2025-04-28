@@ -1,6 +1,7 @@
 package codegen
 
 import (
+	"acc/internal/common/errors"
 	"acc/internal/ir"
 	"acc/internal/parser"
 	"fmt"
@@ -30,7 +31,7 @@ func (g *AsmGenerator) Generate(node *ir.Program) error {
 		return nil
 	}
 
-	return fmt.Errorf("failed to generate TAC program")
+	return errors.NewCodeGenError("top ASM node os not a Program")
 }
 
 func (g *AsmGenerator) VisitProgram(node *ir.Program) any {
