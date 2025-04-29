@@ -134,10 +134,11 @@ func (p *Parser) parseBlockItem() (BlockItem, error) {
 }
 
 func (p *Parser) parseStatement() (Statement, error) {
-	if p.peek().Type == lexer.TokenSemicolon {
+	nextToken := p.peek()
+	if nextToken.Type == lexer.TokenSemicolon {
 		p.expect(lexer.TokenSemicolon)
-		return &NullStmt{}, nil
-	} else if p.peek().Type == lexer.TokenReturn {
+		return &NullStmt{Loc: nextToken.Loc}, nil
+	} else if nextToken.Type == lexer.TokenReturn {
 		p.expect(lexer.TokenReturn)
 
 		expr, err := p.parseExpression(0)
@@ -148,7 +149,38 @@ func (p *Parser) parseStatement() (Statement, error) {
 		if exists, tok := p.expect(lexer.TokenSemicolon); !exists {
 			return nil, errors.NewParseError("missing semicolon", tok.Loc)
 		}
-		return &ReturnStmt{Expression: expr}, nil
+		return &ReturnStmt{Loc: nextToken.Loc, Expression: expr}, nil
+	} else if nextToken.Type == lexer.TokenIf {
+		p.expect(lexer.TokenIf)
+
+		if exists, tok := p.expect(lexer.TokenOpenParen); !exists {
+			return nil, errors.NewParseError("missing opening parenthesis", tok.Loc)
+		}
+
+		condition, err := p.parseExpression(0)
+		if err != nil {
+			return nil, err
+		}
+
+		if exists, tok := p.expect(lexer.TokenCloseParen); !exists {
+			return nil, errors.NewParseError("missing semicolon", tok.Loc)
+		}
+
+		then, err := p.parseStatement()
+		if err != nil {
+			return nil, err
+		}
+
+		if p.peek().Type == lexer.TokenElse {
+			p.expect(lexer.TokenElse)
+			elseStmt, err := p.parseStatement()
+			if err != nil {
+				return nil, err
+			}
+			return &IfStmt{Loc: nextToken.Loc, Condition: condition, Then: then, Else: elseStmt}, nil
+		}
+		return &IfStmt{Loc: nextToken.Loc, Condition: condition, Then: then}, nil
+
 	} else {
 		expr, err := p.parseExpression(0)
 		if err != nil {
@@ -159,7 +191,7 @@ func (p *Parser) parseStatement() (Statement, error) {
 			return nil, errors.NewParseError("missing semicolon", tok.Loc)
 		}
 
-		return &ExpressionStmt{Expression: expr}, nil
+		return &ExpressionStmt{Loc: nextToken.Loc, Expression: expr}, nil
 	}
 }
 
@@ -185,8 +217,18 @@ func (p *Parser) parseExpression(minPrecedence int) (Expression, error) {
 				return nil, err
 			}
 
-			leftExpr = &AssignmentExp{Left: leftExpr, Right: rightExpr}
+			leftExpr = &AssignmentExp{Loc: nextToken.Loc, Left: leftExpr, Right: rightExpr}
 
+		} else if nextToken.Type == lexer.TokenConditionalOpFront {
+			middle, err := p.parseConditionalMiddle()
+			if err != nil {
+				return nil, err
+			}
+			rightExpr, err := p.parseExpression(precedence)
+			if err != nil {
+				return nil, err
+			}
+			leftExpr = &ConditionalExp{Loc: nextToken.Loc, Condition: leftExpr, Expression1: middle, Expression2: rightExpr}
 		} else {
 			op, err := p.parseBinaryOp()
 			if err != nil {
@@ -198,14 +240,27 @@ func (p *Parser) parseExpression(minPrecedence int) (Expression, error) {
 				return nil, err
 			}
 
-			leftExpr = &BinaryExp{Left: leftExpr, Right: rightExpr, Op: op}
+			leftExpr = &BinaryExp{Loc: nextToken.Loc, Left: leftExpr, Right: rightExpr, Op: op}
 		}
 	}
 	return leftExpr, nil
 }
 
+func (p *Parser) parseConditionalMiddle() (Expression, error) {
+	p.expect(lexer.TokenConditionalOpFront)
+	expr, err := p.parseExpression(0)
+	if err != nil {
+		return nil, err
+	}
+	if exists, tok := p.expect(lexer.TokenConditionalOpEnd); !exists {
+		return nil, errors.NewParseError("missing end of conditional", tok.Loc)
+	}
+	return expr, nil
+}
+
 func (p *Parser) parseFactor() (Factor, error) {
-	switch p.peek().Type {
+	nextTok := p.peek()
+	switch nextTok.Type {
 	case lexer.TokenConstant:
 		intNode, err := p.parseInt()
 		if err != nil {
@@ -229,7 +284,7 @@ func (p *Parser) parseFactor() (Factor, error) {
 		if exists, tok := p.expect(lexer.TokenCloseParen); !exists {
 			return nil, errors.NewParseError("missing )", tok.Loc)
 		}
-		return &NestedExp{Expr: expr}, nil
+		return &NestedExp{Loc: nextTok.Loc, Expr: expr}, nil
 
 	default:
 		ident, err := p.parseIdentifier()
@@ -263,7 +318,7 @@ func (p *Parser) parseUnaryOp() (*UnaryFactor, error) {
 		return nil, err
 	}
 
-	return &UnaryFactor{Op: opType, Value: exp}, nil
+	return &UnaryFactor{Loc: nextTok.Loc, Op: opType, Value: exp}, nil
 }
 
 func (p *Parser) parseBinaryOp() (BinopType, error) {
@@ -319,7 +374,7 @@ func (p *Parser) parseIdentifier() (IdentifierFactor, error) {
 	if !exists {
 		return IdentifierFactor{}, errors.NewParseError("missing identifier", tok.Loc)
 	}
-	return IdentifierFactor{Value: tok.Literal}, nil
+	return IdentifierFactor{Loc: tok.Loc, Value: tok.Literal}, nil
 }
 
 func (p *Parser) parseInt() (*IntLiteral, error) {
@@ -331,7 +386,7 @@ func (p *Parser) parseInt() (*IntLiteral, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &IntLiteral{Value: int(val)}, nil
+	return &IntLiteral{Loc: tok.Loc, Value: int(val)}, nil
 }
 
 func binopPrecedence(tok lexer.Token) int {
@@ -348,6 +403,8 @@ func binopPrecedence(tok lexer.Token) int {
 		return 10
 	case lexer.TokenOrOp:
 		return 5
+	case lexer.TokenConditionalOpFront:
+		return 3
 	case lexer.TokenAssignmentOp:
 		return 1
 	default:

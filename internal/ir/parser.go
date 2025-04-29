@@ -177,3 +177,46 @@ func (g *TACGenerator) VisitUnaryFactor(node *parser.UnaryFactor) interface{} {
 func (g *TACGenerator) VisitIntLiteral(node *parser.IntLiteral) interface{} {
 	return &Constant{Value: node.Value}
 }
+
+func (g *TACGenerator) VisitConditionalExp(node *parser.ConditionalExp) any {
+	condition := node.Condition.Accept(g).(Value)
+	e2Label := g.makeLabel("conditional_e2")
+	endLabel := g.makeLabel("conditional_end")
+	dstVar := &Variable{Identifier: g.makeTemporaryVar()}
+
+	g.instructions = append(g.instructions, &JumpIfZeroInstr{Condition: condition, Target: e2Label})
+
+	v1 := node.Expression1.Accept(g).(Value)
+
+	g.instructions = append(g.instructions, &CopyInstr{Src: v1, Dst: dstVar}, &JumpInstr{Identifier: endLabel}, &LabelInstr{Identifier: e2Label})
+
+	v2 := node.Expression2.Accept(g).(Value)
+
+	g.instructions = append(g.instructions, &CopyInstr{Src: v2, Dst: dstVar}, &LabelInstr{Identifier: endLabel})
+	return dstVar
+}
+func (g *TACGenerator) VisitIfStatement(node *parser.IfStmt) any {
+	if node.Else == nil {
+		condition := node.Condition.Accept(g).(Value)
+		endLabel := g.makeLabel("if_end")
+
+		g.instructions = append(g.instructions, &JumpIfZeroInstr{Condition: condition, Target: endLabel})
+
+		node.Then.Accept(g)
+		g.instructions = append(g.instructions, &LabelInstr{Identifier: endLabel})
+		return nil
+	} else {
+		condition := node.Condition.Accept(g).(Value)
+		elseLabel := g.makeLabel("if_else")
+		endLabel := g.makeLabel("if_end")
+
+		g.instructions = append(g.instructions, &JumpIfZeroInstr{Condition: condition, Target: elseLabel})
+
+		node.Then.Accept(g)
+		g.instructions = append(g.instructions, &JumpInstr{Identifier: endLabel}, &LabelInstr{Identifier: elseLabel})
+
+		node.Else.Accept(g)
+		g.instructions = append(g.instructions, &LabelInstr{Identifier: endLabel})
+		return nil
+	}
+}

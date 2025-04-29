@@ -107,6 +107,10 @@ func (l *Lexer) scanToken() error {
 		} else {
 			l.addToken(TokenAssignmentOp, "=")
 		}
+	case '?':
+		l.addToken(TokenConditionalOpFront, "?")
+	case ':':
+		l.addToken(TokenConditionalOpEnd, ":")
 
 	// Ignore whitespace
 	case ' ', '\t', '\r':

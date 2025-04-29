@@ -12,6 +12,9 @@ const (
 	TokenCloseBrace
 	TokenSemicolon
 
+	TokenConditionalOpFront
+	TokenConditionalOpEnd
+
 	// Literals
 	TokenIdentifier
 	TokenConstant
@@ -20,6 +23,8 @@ const (
 	TokenInt
 	TokenVoid
 	TokenReturn
+	TokenIf
+	TokenElse
 
 	// Unary Operators
 	TokenBitwiseCompOp
@@ -66,4 +71,6 @@ var Keywords = map[string]TokenType{
 	"int":    TokenInt,
 	"void":   TokenVoid,
 	"return": TokenReturn,
+	"if":     TokenIf,
+	"else":   TokenElse,
 }

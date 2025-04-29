@@ -31,17 +31,18 @@ type AstVisitor interface {
 	VisitProgram(node *Program) any
 	VisitFunction(node *Function) any
 	VisitReturnStatement(node *ReturnStmt) any
+	VisitIfStatement(node *IfStmt) any
 	VisitNullStatement(node *NullStmt) any
 	VisitDeclaration(node *Declaration) any
 	VisitBinaryExp(node *BinaryExp) any
 	VisitAssignmentExp(node *AssignmentExp) any
+	VisitConditionalExp(node *ConditionalExp) any
 	VisitUnaryFactor(node *UnaryFactor) any
 	VisitIdentifierFactor(node *IdentifierFactor) any
 	VisitIntLiteral(node *IntLiteral) any
 }
 
 type Node interface {
-	// Position() errors.Location
 	Accept(visitor AstVisitor) any
 }
 
@@ -95,6 +96,13 @@ type ExpressionStmt struct {
 	Expression Expression
 }
 
+type IfStmt struct {
+	Loc       errors.Location
+	Condition Expression
+	Then      Statement
+	Else      Statement
+}
+
 type NullStmt struct {
 	Loc errors.Location
 }
@@ -109,6 +117,13 @@ type BinaryExp struct {
 type FactorExp struct {
 	Loc    errors.Location
 	Factor Factor
+}
+
+type ConditionalExp struct {
+	Loc         errors.Location
+	Condition   Expression
+	Expression1 Expression
+	Expression2 Expression
 }
 
 type IntLiteral struct {
@@ -167,6 +182,9 @@ func (s *ExpressionStmt) Accept(visitor AstVisitor) any {
 	return s.Expression.Accept(visitor)
 }
 
+func (s *IfStmt) Accept(visitor AstVisitor) any {
+	return visitor.VisitIfStatement(s)
+}
 func (s *NullStmt) Accept(visitor AstVisitor) any {
 	return visitor.VisitNullStatement(s)
 }
@@ -177,6 +195,10 @@ func (b *BinaryExp) Accept(visitor AstVisitor) any {
 
 func (n *FactorExp) Accept(visitor AstVisitor) any {
 	return n.Factor.Accept(visitor)
+}
+
+func (n *ConditionalExp) Accept(visitor AstVisitor) any {
+	return visitor.VisitConditionalExp(n)
 }
 
 func (i *IntLiteral) Accept(visitor AstVisitor) any {
@@ -203,75 +225,18 @@ func (u *Declaration) Accept(visitor AstVisitor) any {
 	return visitor.VisitDeclaration(u)
 }
 
-// func (p *Program) Position() errors.Location {
-// 	return p.Loc
-// }
-
-// func (f *Function) Position() errors.Location {
-// 	return f.Loc
-// }
-
-// func (s *StmtBlock) Position() errors.Location {
-// 	return s.Loc
-// }
-
-// func (s *DeclarationBlock) Position() errors.Location {
-// 	return s.Loc
-// }
-
-// func (s *ReturnStmt) Position() errors.Location {
-// 	return s.Loc
-// }
-// func (s *ExpressionStmt) Position() errors.Location {
-// 	return s.Loc
-// }
-
-// func (s *NullStmt) Position() errors.Location {
-// 	return s.Loc
-// }
-
-// func (b *BinaryExp) Position() errors.Location {
-// 	return b.Loc
-// }
-
-// func (n *FactorExp) Position() errors.Location {
-// 	return n.Loc
-// }
-
-// func (i *IntLiteral) Position() errors.Location {
-// 	return i.Loc
-// }
-
-// func (u *UnaryFactor) Position() errors.Location {
-// 	return u.Loc
-// }
-
-// func (u *NestedExp) Position() errors.Location {
-// 	return u.Loc
-// }
-
-// func (u *AssignmentExp) Position() errors.Location {
-// 	return u.Loc
-// }
-
-func (u *IdentifierFactor) Position() errors.Location {
-	return u.Loc
-}
-
-func (u *Declaration) Position() errors.Location {
-	return u.Loc
-}
-
 func (StmtBlock) block()        {}
 func (DeclarationBlock) block() {}
 
 func (ReturnStmt) stmt()     {}
 func (ExpressionStmt) stmt() {}
+func (IfStmt) stmt()         {}
 func (NullStmt) stmt()       {}
 
-func (BinaryExp) exp()     {}
-func (FactorExp) exp()     {}
-func (AssignmentExp) exp() {}
+func (BinaryExp) exp()      {}
+func (FactorExp) exp()      {}
+func (AssignmentExp) exp()  {}
+func (ConditionalExp) exp() {}
 
 func (IntLiteral) factor()       {}
 func (UnaryFactor) factor()      {}
