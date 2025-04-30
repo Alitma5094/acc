@@ -46,10 +46,7 @@ func (g *TACGenerator) VisitProgram(node *parser.Program) interface{} {
 }
 
 func (g *TACGenerator) VisitFunction(node *parser.Function) interface{} {
-
-	for _, v := range node.Body {
-		v.Accept(g)
-	}
+	node.Body.Accept(g)
 
 	// Handle situation where function has no return statement; if function has return statement this will do nothing
 	g.instructions = append(g.instructions, &ReturnInstr{Value: &Constant{Value: 0}})
@@ -57,6 +54,13 @@ func (g *TACGenerator) VisitFunction(node *parser.Function) interface{} {
 	return Function{
 		Identifier: node.Name.Value,
 	}
+}
+
+func (g *TACGenerator) VisitBlock(node *parser.Block) any {
+	for _, v := range node.Body {
+		v.Accept(g)
+	}
+	return nil
 }
 
 func (g *TACGenerator) VisitReturnStatement(node *parser.ReturnStmt) any {

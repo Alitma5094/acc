@@ -40,6 +40,7 @@ type AstVisitor interface {
 	VisitUnaryFactor(node *UnaryFactor) any
 	VisitIdentifierFactor(node *IdentifierFactor) any
 	VisitIntLiteral(node *IntLiteral) any
+	VisitBlock(node *Block) any
 }
 
 type Node interface {
@@ -74,6 +75,10 @@ type Program struct {
 type Function struct {
 	Loc  errors.Location
 	Name IdentifierFactor
+	Body Block
+}
+
+type Block struct {
 	Body []BlockItem
 }
 
@@ -101,6 +106,10 @@ type IfStmt struct {
 	Condition Expression
 	Then      Statement
 	Else      Statement
+}
+
+type CompoundStmt struct {
+	Block Block
 }
 
 type NullStmt struct {
@@ -185,6 +194,15 @@ func (s *ExpressionStmt) Accept(visitor AstVisitor) any {
 func (s *IfStmt) Accept(visitor AstVisitor) any {
 	return visitor.VisitIfStatement(s)
 }
+
+func (s *CompoundStmt) Accept(visitor AstVisitor) any {
+	return s.Block.Accept(visitor)
+}
+
+func (b *Block) Accept(visitor AstVisitor) any {
+	return visitor.VisitBlock(b)
+}
+
 func (s *NullStmt) Accept(visitor AstVisitor) any {
 	return visitor.VisitNullStatement(s)
 }
@@ -231,6 +249,7 @@ func (DeclarationBlock) block() {}
 func (ReturnStmt) stmt()     {}
 func (ExpressionStmt) stmt() {}
 func (IfStmt) stmt()         {}
+func (CompoundStmt) stmt()   {}
 func (NullStmt) stmt()       {}
 
 func (BinaryExp) exp()      {}

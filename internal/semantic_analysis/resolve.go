@@ -7,13 +7,26 @@ import (
 )
 
 type SemanticAnalyzer struct {
-	variables      map[string]string
+	variables      map[string]Variable
 	TempVarCounter int
 	program        parser.Program
 }
 
+type Variable struct {
+	NewName          string
+	FromCurrentBlock bool
+}
+
+func (a *SemanticAnalyzer) copyVars() map[string]Variable {
+	newVar := make(map[string]Variable, len(a.variables))
+	for k, v := range a.variables {
+		newVar[k] = Variable{NewName: v.NewName, FromCurrentBlock: false}
+	}
+	return newVar
+}
+
 func NewSemanticAnalyzer(program parser.Program) SemanticAnalyzer {
-	return SemanticAnalyzer{program: program, variables: make(map[string]string)}
+	return SemanticAnalyzer{program: program, variables: make(map[string]Variable)}
 }
 
 func (a *SemanticAnalyzer) makeTemporaryVar(prefix string) string {
@@ -21,8 +34,29 @@ func (a *SemanticAnalyzer) makeTemporaryVar(prefix string) string {
 	return fmt.Sprintf("%d.%s", a.TempVarCounter, prefix)
 }
 
-func (a *SemanticAnalyzer) ResolveDeclarations() error {
-	for _, item := range a.program.Function.Body {
+func (a *SemanticAnalyzer) ResolveVariables() error {
+	return a.resolveBlock(&a.program.Function.Body)
+}
+
+func (a *SemanticAnalyzer) resolveDeclaration(declaration *parser.Declaration) error {
+	variable, ok := a.variables[declaration.Name.Value]
+	if ok && variable.FromCurrentBlock {
+		return errors.NewAnalysisError("duplicate variable declaration", declaration.Loc)
+	}
+
+	a.variables[declaration.Name.Value] = Variable{NewName: a.makeTemporaryVar(declaration.Name.Value), FromCurrentBlock: true}
+	declaration.Name.Value = a.variables[declaration.Name.Value].NewName
+	if declaration.Init != nil {
+		err := a.resolveExpression(&declaration.Init)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (a *SemanticAnalyzer) resolveBlock(block *parser.Block) error {
+	for _, item := range block.Body {
 		switch item := item.(type) {
 		case *parser.DeclarationBlock:
 			err := a.resolveDeclaration(&item.Declaration)
@@ -36,24 +70,6 @@ func (a *SemanticAnalyzer) ResolveDeclarations() error {
 			}
 		default:
 			panic("invalid block item type")
-
-		}
-	}
-	return nil
-}
-
-func (a *SemanticAnalyzer) resolveDeclaration(declaration *parser.Declaration) error {
-	_, ok := a.variables[declaration.Name.Value]
-	if ok {
-		return errors.NewAnalysisError("duplicate variable declaration", declaration.Loc)
-	}
-
-	a.variables[declaration.Name.Value] = a.makeTemporaryVar(declaration.Name.Value)
-	declaration.Name.Value = a.variables[declaration.Name.Value]
-	if declaration.Init != nil {
-		err := a.resolveExpression(&declaration.Init)
-		if err != nil {
-			return err
 		}
 	}
 	return nil
@@ -88,11 +104,7 @@ func (a *SemanticAnalyzer) resolveExpression(expression *parser.Expression) erro
 		}
 		return nil
 	case *parser.FactorExp:
-		err := a.resolveFactor(&item.Factor)
-		if err != nil {
-			return err
-		}
-		return nil
+		return a.resolveFactor(&item.Factor)
 	case *parser.ConditionalExp:
 		err := a.resolveExpression(&item.Condition)
 		if err != nil {
@@ -118,17 +130,9 @@ func (a *SemanticAnalyzer) resolveExpression(expression *parser.Expression) erro
 func (a *SemanticAnalyzer) resolveStatement(statement *parser.Statement) error {
 	switch item := (*statement).(type) {
 	case *parser.ReturnStmt:
-		err := a.resolveExpression(&item.Expression)
-		if err != nil {
-			return err
-		}
-		return nil
+		return a.resolveExpression(&item.Expression)
 	case *parser.ExpressionStmt:
-		err := a.resolveExpression(&item.Expression)
-		if err != nil {
-			return err
-		}
-		return nil
+		return a.resolveExpression(&item.Expression)
 	case *parser.NullStmt:
 		return nil
 	case *parser.IfStmt:
@@ -147,6 +151,12 @@ func (a *SemanticAnalyzer) resolveStatement(statement *parser.Statement) error {
 			}
 		}
 		return nil
+	case *parser.CompoundStmt:
+		oldVars := a.variables
+		a.variables = a.copyVars()
+		err := a.resolveBlock(&item.Block)
+		a.variables = oldVars
+		return err
 	default:
 		panic("invalid statement type")
 
@@ -158,20 +168,12 @@ func (a *SemanticAnalyzer) resolveFactor(factor *parser.Factor) error {
 	case *parser.IntLiteral:
 		return nil
 	case *parser.UnaryFactor:
-		err := a.resolveFactor(&item.Value)
-		if err != nil {
-			return err
-		}
-		return nil
+		return a.resolveFactor(&item.Value)
 	case *parser.NestedExp:
-		err := a.resolveExpression(&item.Expr)
-		if err != nil {
-			return err
-		}
-		return nil
+		return a.resolveExpression(&item.Expr)
 	case *parser.IdentifierFactor:
 		if variable, ok := a.variables[item.Value]; ok {
-			item.Value = variable
+			item.Value = variable.NewName
 		} else {
 			return errors.NewAnalysisError("undeclared variable", item.Loc)
 		}

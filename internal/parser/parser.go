@@ -74,8 +74,21 @@ func (p *Parser) parseFunction() (*Function, error) {
 	if exists, tok := p.expect(lexer.TokenCloseParen); !exists {
 		return nil, errors.NewParseError("missing )", tok.Loc)
 	}
+
+	body, err := p.parseBlock()
+	if err != nil {
+		return nil, err
+	}
+
+	return &Function{
+		Name: ident,
+		Body: body,
+	}, nil
+}
+
+func (p *Parser) parseBlock() (Block, error) {
 	if exists, tok := p.expect(lexer.TokenOpenBrace); !exists {
-		return nil, errors.NewParseError("missing {", tok.Loc)
+		return Block{}, errors.NewParseError("missing {", tok.Loc)
 	}
 
 	body := []BlockItem{}
@@ -83,19 +96,16 @@ func (p *Parser) parseFunction() (*Function, error) {
 	for p.peek().Type != lexer.TokenCloseBrace {
 		item, err := p.parseBlockItem()
 		if err != nil {
-			return nil, err
+			return Block{}, err
 		}
 		body = append(body, item)
 	}
 
 	if exists, tok := p.expect(lexer.TokenCloseBrace); !exists {
-		return nil, errors.NewParseError("missing }", tok.Loc)
+		return Block{}, errors.NewParseError("missing }", tok.Loc)
 	}
 
-	return &Function{
-		Name: ident,
-		Body: body,
-	}, nil
+	return Block{Body: body}, nil
 }
 
 func (p *Parser) parseBlockItem() (BlockItem, error) {
@@ -181,6 +191,12 @@ func (p *Parser) parseStatement() (Statement, error) {
 		}
 		return &IfStmt{Loc: nextToken.Loc, Condition: condition, Then: then}, nil
 
+	} else if nextToken.Type == lexer.TokenOpenBrace {
+		block, err := p.parseBlock()
+		if err != nil {
+			return nil, err
+		}
+		return &CompoundStmt{Block: block}, nil
 	} else {
 		expr, err := p.parseExpression(0)
 		if err != nil {

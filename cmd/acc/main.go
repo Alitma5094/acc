@@ -85,7 +85,7 @@ func runCompiler(source, inputFile string, cfg *config.CompilerConfig) error {
 
 	// Run semantic analysis
 	ana := semanticanalysis.NewSemanticAnalyzer(*ast)
-	err = ana.ResolveDeclarations()
+	err = ana.ResolveVariables()
 	if err != nil {
 		return err
 	}
