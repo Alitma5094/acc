@@ -157,10 +157,83 @@ func (a *SemanticAnalyzer) resolveStatement(statement *parser.Statement) error {
 		err := a.resolveBlock(&item.Block)
 		a.variables = oldVars
 		return err
+	case *parser.WhileStmt:
+		err := a.resolveExpression(&item.Condition)
+		if err != nil {
+			return err
+		}
+		err = a.resolveStatement(&item.Body)
+		if err != nil {
+			return err
+		}
+		return nil
+	case *parser.DoWhileStmt:
+		err := a.resolveStatement(&item.Body)
+		if err != nil {
+			return err
+		}
+		err = a.resolveExpression(&item.Condition)
+		if err != nil {
+			return err
+		}
+		return nil
+	case *parser.ForStmt:
+		oldVars := a.variables
+		a.variables = a.copyVars()
+
+		err := a.resolveForInit(item.Init)
+		if err != nil {
+			return err
+		}
+
+		err = a.resolveOptionalExpression(item.Condition)
+		if err != nil {
+			return err
+		}
+
+		err = a.resolveOptionalExpression(item.Post)
+		if err != nil {
+			return err
+		}
+
+		err = a.resolveStatement(&item.Body)
+		if err != nil {
+			return err
+		}
+
+		a.variables = oldVars
+		return nil
+	case *parser.BreakStmt:
+		return nil
+	case *parser.ContinueStmt:
+		return nil
 	default:
 		panic("invalid statement type")
 
 	}
+}
+
+func (a *SemanticAnalyzer) resolveForInit(forInit parser.ForInit) error {
+	if forInit == nil {
+		return nil
+	}
+	switch i := forInit.(type) {
+	case *parser.InitExp:
+		return a.resolveOptionalExpression(i.Expression)
+	case *parser.InitDecl:
+		return a.resolveDeclaration(&i.Declaration)
+
+	default:
+		panic("invalid for init type")
+	}
+}
+
+func (a *SemanticAnalyzer) resolveOptionalExpression(exp parser.Expression) error {
+	if exp == nil {
+		return nil
+	}
+
+	return a.resolveExpression(&exp)
 }
 
 func (a *SemanticAnalyzer) resolveFactor(factor *parser.Factor) error {

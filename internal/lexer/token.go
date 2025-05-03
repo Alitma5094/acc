@@ -25,6 +25,11 @@ const (
 	TokenReturn
 	TokenIf
 	TokenElse
+	TokenDo
+	TokenWhile
+	TokenFor
+	TokenBreak
+	TokenContinue
 
 	// Unary Operators
 	TokenBitwiseCompOp
@@ -68,9 +73,14 @@ func NewToken(tokenType TokenType, literal string, loc errors.Location) Token {
 }
 
 var Keywords = map[string]TokenType{
-	"int":    TokenInt,
-	"void":   TokenVoid,
-	"return": TokenReturn,
-	"if":     TokenIf,
-	"else":   TokenElse,
+	"int":      TokenInt,
+	"void":     TokenVoid,
+	"return":   TokenReturn,
+	"if":       TokenIf,
+	"else":     TokenElse,
+	"do":       TokenDo,
+	"while":    TokenWhile,
+	"for":      TokenFor,
+	"break":    TokenBreak,
+	"continue": TokenContinue,
 }

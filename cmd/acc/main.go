@@ -90,6 +90,11 @@ func runCompiler(source, inputFile string, cfg *config.CompilerConfig) error {
 		return err
 	}
 
+	err = ana.LabelLoops()
+	if err != nil {
+		return err
+	}
+
 	if cfg.StopAfterValidate {
 		return nil
 	}

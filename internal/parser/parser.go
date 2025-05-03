@@ -110,28 +110,11 @@ func (p *Parser) parseBlock() (Block, error) {
 
 func (p *Parser) parseBlockItem() (BlockItem, error) {
 	if p.peek().Type == lexer.TokenInt {
-		// Declaration
-		p.expect(lexer.TokenInt)
-
-		ident, err := p.parseIdentifier()
+		decl, err := p.parseDeclaration()
 		if err != nil {
 			return nil, err
 		}
-
-		var expression Expression
-		if p.peek().Type == lexer.TokenAssignmentOp {
-			p.expect(lexer.TokenAssignmentOp)
-			expression, err = p.parseExpression(0)
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		if exists, tok := p.expect(lexer.TokenSemicolon); !exists {
-			return nil, errors.NewParseError("missing semicolon", tok.Loc)
-		}
-
-		return &DeclarationBlock{Declaration: Declaration{Name: ident, Init: expression}}, nil
+		return &DeclarationBlock{Declaration: *decl}, err
 
 	} else {
 		// Statement
@@ -143,12 +126,38 @@ func (p *Parser) parseBlockItem() (BlockItem, error) {
 	}
 }
 
+func (p *Parser) parseDeclaration() (*Declaration, error) {
+	// Declaration
+	p.expect(lexer.TokenInt)
+
+	ident, err := p.parseIdentifier()
+	if err != nil {
+		return nil, err
+	}
+
+	var expression Expression
+	if p.peek().Type == lexer.TokenAssignmentOp {
+		p.expect(lexer.TokenAssignmentOp)
+		expression, err = p.parseExpression(0)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if exists, tok := p.expect(lexer.TokenSemicolon); !exists {
+		return nil, errors.NewParseError("missing semicolon", tok.Loc)
+	}
+
+	return &Declaration{Name: ident, Init: expression}, nil
+}
+
 func (p *Parser) parseStatement() (Statement, error) {
 	nextToken := p.peek()
-	if nextToken.Type == lexer.TokenSemicolon {
+	switch nextToken.Type {
+	case lexer.TokenSemicolon:
 		p.expect(lexer.TokenSemicolon)
 		return &NullStmt{Loc: nextToken.Loc}, nil
-	} else if nextToken.Type == lexer.TokenReturn {
+	case lexer.TokenReturn:
 		p.expect(lexer.TokenReturn)
 
 		expr, err := p.parseExpression(0)
@@ -160,7 +169,7 @@ func (p *Parser) parseStatement() (Statement, error) {
 			return nil, errors.NewParseError("missing semicolon", tok.Loc)
 		}
 		return &ReturnStmt{Loc: nextToken.Loc, Expression: expr}, nil
-	} else if nextToken.Type == lexer.TokenIf {
+	case lexer.TokenIf:
 		p.expect(lexer.TokenIf)
 
 		if exists, tok := p.expect(lexer.TokenOpenParen); !exists {
@@ -190,14 +199,104 @@ func (p *Parser) parseStatement() (Statement, error) {
 			return &IfStmt{Loc: nextToken.Loc, Condition: condition, Then: then, Else: elseStmt}, nil
 		}
 		return &IfStmt{Loc: nextToken.Loc, Condition: condition, Then: then}, nil
-
-	} else if nextToken.Type == lexer.TokenOpenBrace {
+	case lexer.TokenOpenBrace:
 		block, err := p.parseBlock()
 		if err != nil {
 			return nil, err
 		}
 		return &CompoundStmt{Block: block}, nil
-	} else {
+	case lexer.TokenBreak:
+		p.expect(lexer.TokenBreak)
+
+		if exists, tok := p.expect(lexer.TokenSemicolon); !exists {
+			return nil, errors.NewParseError("missing semicolon", tok.Loc)
+		}
+		return &BreakStmt{}, nil
+	case lexer.TokenContinue:
+		p.expect(lexer.TokenBreak)
+
+		if exists, tok := p.expect(lexer.TokenSemicolon); !exists {
+			return nil, errors.NewParseError("missing semicolon", tok.Loc)
+		}
+		return &ContinueStmt{}, nil
+	case lexer.TokenWhile:
+		p.expect(lexer.TokenWhile)
+
+		if exists, tok := p.expect(lexer.TokenOpenParen); !exists {
+			return nil, errors.NewParseError("missing open parenthesis", tok.Loc)
+		}
+
+		exp, err := p.parseExpression(0)
+		if err != nil {
+			return nil, err
+		}
+
+		if exists, tok := p.expect(lexer.TokenCloseParen); !exists {
+			return nil, errors.NewParseError("missing close parenthesis", tok.Loc)
+		}
+
+		stmt, err := p.parseStatement()
+		if err != nil {
+			return nil, err
+		}
+
+		return &WhileStmt{Condition: exp, Body: stmt}, nil
+	case lexer.TokenDo:
+		p.expect(lexer.TokenDo)
+
+		stmt, err := p.parseStatement()
+		if err != nil {
+			return nil, err
+		}
+
+		if exists, tok := p.expect(lexer.TokenWhile); !exists {
+			return nil, errors.NewParseError("missing while", tok.Loc)
+		}
+		if exists, tok := p.expect(lexer.TokenOpenParen); !exists {
+			return nil, errors.NewParseError("missing open parenthesis", tok.Loc)
+		}
+
+		exp, err := p.parseExpression(0)
+		if err != nil {
+			return nil, err
+		}
+
+		if exists, tok := p.expect(lexer.TokenCloseParen); !exists {
+			return nil, errors.NewParseError("missing close parenthesis", tok.Loc)
+		}
+
+		if exists, tok := p.expect(lexer.TokenSemicolon); !exists {
+			return nil, errors.NewParseError("missing semicolon", tok.Loc)
+		}
+
+		return &DoWhileStmt{Body: stmt, Condition: exp}, nil
+	case lexer.TokenFor:
+		p.expect(lexer.TokenFor)
+		if exists, tok := p.expect(lexer.TokenOpenParen); !exists {
+			return nil, errors.NewParseError("missing open parenthesis", tok.Loc)
+		}
+		init, err := p.parseForInit()
+		if err != nil {
+			return nil, err
+		}
+
+		condition, err := p.parseOptionalExpression(lexer.TokenSemicolon)
+		if err != nil {
+			return nil, err
+		}
+
+		post, err := p.parseOptionalExpression(lexer.TokenCloseParen)
+		if err != nil {
+			return nil, err
+		}
+
+		stmt, err := p.parseStatement()
+		if err != nil {
+			return nil, err
+		}
+
+		return &ForStmt{Init: init, Condition: condition, Post: post, Body: stmt}, nil
+	default:
 		expr, err := p.parseExpression(0)
 		if err != nil {
 			return nil, err
@@ -209,6 +308,38 @@ func (p *Parser) parseStatement() (Statement, error) {
 
 		return &ExpressionStmt{Loc: nextToken.Loc, Expression: expr}, nil
 	}
+}
+
+func (p *Parser) parseOptionalExpression(terminatingToken lexer.TokenType) (Expression, error) {
+	if tok := p.peek(); tok.Type == terminatingToken {
+		p.expect(terminatingToken)
+		return nil, nil
+	}
+
+	exp, err := p.parseExpression(0)
+	if exists, _ := p.expect(terminatingToken); !exists {
+		return nil, err
+	}
+	return exp, err
+}
+
+func (p *Parser) parseForInit() (ForInit, error) {
+	if p.peek().Type == lexer.TokenSemicolon {
+		p.expect(lexer.TokenSemicolon)
+		return nil, nil
+	} else if p.peek().Type == lexer.TokenInt {
+		decl, err := p.parseDeclaration()
+		if err != nil {
+			return nil, err
+		}
+		return &InitDecl{Declaration: *decl}, nil
+	}
+
+	exp, err := p.parseOptionalExpression(lexer.TokenSemicolon)
+	if err != nil {
+		return nil, err
+	}
+	return &InitExp{Expression: exp}, err
 }
 
 func (p *Parser) parseExpression(minPrecedence int) (Expression, error) {

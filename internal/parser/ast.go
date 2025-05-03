@@ -41,6 +41,11 @@ type AstVisitor interface {
 	VisitIdentifierFactor(node *IdentifierFactor) any
 	VisitIntLiteral(node *IntLiteral) any
 	VisitBlock(node *Block) any
+	VisitBreakStatement(node *BreakStmt) any
+	VisitContinueStatement(node *ContinueStmt) any
+	VisitWhileStatement(node *WhileStmt) any
+	VisitDoWhileStatement(node *DoWhileStmt) any
+	VisitForStatement(node *ForStmt) any
 }
 
 type Node interface {
@@ -65,6 +70,11 @@ type Factor interface {
 type Statement interface {
 	Node
 	stmt()
+}
+
+type ForInit interface {
+	Node
+	forInit()
 }
 
 type Program struct {
@@ -110,6 +120,41 @@ type IfStmt struct {
 
 type CompoundStmt struct {
 	Block Block
+}
+
+type BreakStmt struct {
+	Label string
+}
+
+type ContinueStmt struct {
+	Label string
+}
+
+type WhileStmt struct {
+	Label     string
+	Condition Expression
+	Body      Statement
+}
+
+type DoWhileStmt struct {
+	Label     string
+	Body      Statement
+	Condition Expression
+}
+
+type ForStmt struct {
+	Label     string
+	Init      ForInit
+	Condition Expression
+	Post      Expression
+	Body      Statement
+}
+
+type InitDecl struct {
+	Declaration Declaration
+}
+type InitExp struct {
+	Expression Expression
 }
 
 type NullStmt struct {
@@ -243,6 +288,29 @@ func (u *Declaration) Accept(visitor AstVisitor) any {
 	return visitor.VisitDeclaration(u)
 }
 
+func (b *BreakStmt) Accept(visitor AstVisitor) any {
+	return visitor.VisitBreakStatement(b)
+}
+func (b *ContinueStmt) Accept(visitor AstVisitor) any {
+	return visitor.VisitContinueStatement(b)
+}
+func (b *WhileStmt) Accept(visitor AstVisitor) any {
+	return visitor.VisitWhileStatement(b)
+}
+func (b *DoWhileStmt) Accept(visitor AstVisitor) any {
+	return visitor.VisitDoWhileStatement(b)
+}
+func (b *ForStmt) Accept(visitor AstVisitor) any {
+	return visitor.VisitForStatement(b)
+}
+
+func (f *InitDecl) Accept(visitor AstVisitor) any {
+	return f.Declaration.Accept(visitor)
+}
+func (f *InitExp) Accept(visitor AstVisitor) any {
+	return f.Expression.Accept(visitor)
+}
+
 func (StmtBlock) block()        {}
 func (DeclarationBlock) block() {}
 
@@ -250,6 +318,11 @@ func (ReturnStmt) stmt()     {}
 func (ExpressionStmt) stmt() {}
 func (IfStmt) stmt()         {}
 func (CompoundStmt) stmt()   {}
+func (BreakStmt) stmt()      {}
+func (ContinueStmt) stmt()   {}
+func (WhileStmt) stmt()      {}
+func (DoWhileStmt) stmt()    {}
+func (ForStmt) stmt()        {}
 func (NullStmt) stmt()       {}
 
 func (BinaryExp) exp()      {}
@@ -261,3 +334,6 @@ func (IntLiteral) factor()       {}
 func (UnaryFactor) factor()      {}
 func (NestedExp) factor()        {}
 func (IdentifierFactor) factor() {}
+
+func (InitDecl) forInit() {}
+func (InitExp) forInit()  {}

@@ -12,7 +12,7 @@ type TACGenerator struct {
 	labelCounter   int
 }
 
-// Acecept starting number from semantic analysis
+// Accept starting number from semantic analysis
 func NewTACGenerator(startVar int) *TACGenerator {
 	return &TACGenerator{tempVarCounter: startVar}
 }
@@ -223,4 +223,68 @@ func (g *TACGenerator) VisitIfStatement(node *parser.IfStmt) any {
 		g.instructions = append(g.instructions, &LabelInstr{Identifier: endLabel})
 		return nil
 	}
+}
+
+func (g *TACGenerator) VisitBreakStatement(node *parser.BreakStmt) any {
+	instr := &JumpInstr{Identifier: fmt.Sprint("break_", node.Label)}
+	g.instructions = append(g.instructions, instr)
+	return instr
+}
+
+func (g *TACGenerator) VisitContinueStatement(node *parser.ContinueStmt) any {
+	instr := &JumpInstr{Identifier: fmt.Sprint("continue_", node.Label)}
+	g.instructions = append(g.instructions, instr)
+	return instr
+}
+
+func (g *TACGenerator) VisitDoWhileStatement(node *parser.DoWhileStmt) any {
+	conditionVar := &Variable{Identifier: g.makeTemporaryVar()}
+	startLabel := fmt.Sprint("start_", node.Label)
+	continueLabel := fmt.Sprint("continue_", node.Label)
+	breakLabel := fmt.Sprint("break_", node.Label)
+
+	g.instructions = append(g.instructions, &LabelInstr{Identifier: startLabel})
+	node.Body.Accept(g)
+	g.instructions = append(g.instructions, &LabelInstr{Identifier: continueLabel})
+	condition := node.Condition.Accept(g).(Value)
+	g.instructions = append(g.instructions, &CopyInstr{Src: condition, Dst: conditionVar}, &JumpIfNotZeroInstr{Condition: conditionVar, Target: startLabel}, &LabelInstr{Identifier: breakLabel})
+	return nil
+}
+
+func (g *TACGenerator) VisitForStatement(node *parser.ForStmt) any {
+	conditionVar := &Variable{Identifier: g.makeTemporaryVar()}
+	startLabel := fmt.Sprint("start_", node.Label)
+	breakLabel := fmt.Sprint("break_", node.Label)
+	continueLabel := fmt.Sprint("continue_", node.Label)
+
+	if node.Init != nil {
+		node.Init.Accept(g)
+	}
+	g.instructions = append(g.instructions, &LabelInstr{Identifier: startLabel})
+	if node.Condition != nil {
+		condition := node.Condition.Accept(g).(Value)
+		g.instructions = append(g.instructions, &CopyInstr{Src: condition, Dst: conditionVar}, &JumpIfZeroInstr{Condition: conditionVar, Target: breakLabel})
+	} else {
+		g.instructions = append(g.instructions, &JumpIfZeroInstr{Condition: &Constant{Value: 1}, Target: breakLabel})
+	}
+	node.Body.Accept(g)
+	g.instructions = append(g.instructions, &LabelInstr{Identifier: continueLabel})
+	if node.Post != nil {
+		node.Post.Accept(g)
+	}
+	g.instructions = append(g.instructions, &JumpInstr{Identifier: startLabel}, &LabelInstr{Identifier: breakLabel})
+	return nil
+}
+
+func (g *TACGenerator) VisitWhileStatement(node *parser.WhileStmt) any {
+	conditionVar := &Variable{Identifier: g.makeTemporaryVar()}
+	continueLabel := fmt.Sprint("continue_", node.Label)
+	breakLabel := fmt.Sprint("break_", node.Label)
+
+	g.instructions = append(g.instructions, &LabelInstr{Identifier: continueLabel})
+	condition := node.Condition.Accept(g).(Value)
+	g.instructions = append(g.instructions, &CopyInstr{Src: condition, Dst: conditionVar}, &JumpIfZeroInstr{Condition: conditionVar, Target: breakLabel})
+	node.Body.Accept(g)
+	g.instructions = append(g.instructions, &JumpInstr{Identifier: continueLabel}, &LabelInstr{Identifier: breakLabel})
+	return nil
 }
